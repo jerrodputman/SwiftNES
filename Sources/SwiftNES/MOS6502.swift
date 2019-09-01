@@ -237,6 +237,9 @@ final class MOS6502 {
         cyclesRemaining == 0
     }
     
+    /// The total number of cycles that have occurred since powering on the device.
+    private(set) var totalCycleCount: UInt32 = 0
+    
     /// Disassembles the program into a human-readable format.
     ///
     /// - parameter start: The address to begin disassembling.
@@ -254,9 +257,6 @@ final class MOS6502 {
     
     /// How many cycles the current instruction has remaining.
     private var cyclesRemaining: UInt8 = 0x00
-    
-    /// The total number of cycles that have occurred since powering on the device.
-    private var totalCycleCount: UInt32 = 0
     
     
     private func fetch() -> UInt8 {
