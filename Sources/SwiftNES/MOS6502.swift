@@ -155,7 +155,7 @@ final class MOS6502 {
         x = 0x00
         y = 0x00
         stkp = 0xfd
-        status = [.unused]
+        status = .unused
         
         // Reset interrupts takes time.
         cyclesRemaining = 8
@@ -878,16 +878,16 @@ extension MOS6502 {
 
         pc += 1 + bytesRead
         
-        status.setOptions(.disableInterrupts, enabled: true)
+        status.insert(.disableInterrupts)
         bus.write(UInt8((pc >> 8) & 0x00FF), to: 0x0100 + UInt16(stkp))
         stkp -= 1
         bus.write(UInt8(pc & 0x00FF), to: 0x0100 + UInt16(stkp));
         stkp -= 1
 
-        status.setOptions(.break, enabled: true)
+        status.insert(.break)
         bus.write(status.rawValue, to: 0x0100 + UInt16(stkp))
         stkp -= 1
-        status.setOptions(.break, enabled: false)
+        status.remove(.break)
 
         pc = UInt16(bus.read(from: 0xfffe)) | (UInt16(bus.read(from: 0xffff)) << 8)
         
@@ -897,25 +897,25 @@ extension MOS6502 {
     
     private func CLC(_ addressMode: AddressMode) -> UInt8 {
         // We assume IMP address mode.
-        status.setOptions(.carry, enabled: false)
+        status.remove(.carry)
         return 0
     }
     
     private func CLD(_ addressMode: AddressMode) -> UInt8 {
         // We assume IMP address mode.
-        status.setOptions(.decimalMode, enabled: false)
+        status.remove(.decimalMode)
         return 0
     }
     
     private func CLI(_ addressMode: AddressMode) -> UInt8 {
         // We assume IMP address mode.
-        status.setOptions(.disableInterrupts, enabled: false)
+        status.remove(.disableInterrupts)
         return 0
     }
     
     private func CLV(_ addressMode: AddressMode) -> UInt8 {
         // We assume IMP address mode.
-        status.setOptions(.resultIsOverflowed, enabled: false)
+        status.remove(.resultIsOverflowed)
         return 0
     }
     
@@ -1156,9 +1156,11 @@ extension MOS6502 {
     
     private func PHP(_ addressMode: AddressMode) -> UInt8 {
         // We assume IMP address mode.
-        status.setOptions([.break, .unused], enabled: true)
+        status.insert(.break)
+        status.insert(.unused)
         bus.write(status.rawValue, to: 0x0100 + UInt16(stkp))
-        status.setOptions([.break, .unused], enabled: false)
+        status.remove(.break)
+        status.remove(.unused)
         stkp -= 1
         return 0
     }
@@ -1177,7 +1179,7 @@ extension MOS6502 {
         // We assume IMP address mode.
         stkp += 1
         status = Status(rawValue: bus.read(from: 0x0100 + UInt16(stkp)))
-        status.setOptions(.unused, enabled: true)
+        status.insert(.unused)
         return 0
     }
     
@@ -1225,7 +1227,8 @@ extension MOS6502 {
         // We assume IMP address mode.
         stkp += 1
         status = Status(rawValue: bus.read(from: 0x0100 + UInt16(stkp)))
-        status.setOptions([.break, .unused], enabled: false)
+        status.remove(.break)
+        status.remove(.unused)
 
         stkp += 1
         pc = UInt16(bus.read(from: 0x0100 + UInt16(stkp)))
@@ -1249,19 +1252,19 @@ extension MOS6502 {
     
     private func SEC(_ addressMode: AddressMode) -> UInt8 {
         // We assume IMP address mode.
-        status.setOptions(.carry, enabled: true)
+        status.insert(.carry)
         return 0
     }
     
     private func SED(_ addressMode: AddressMode) -> UInt8 {
         // We assume IMP address mode.
-        status.setOptions(.decimalMode, enabled: true)
+        status.insert(.decimalMode)
         return 0
     }
     
     private func SEI(_ addressMode: AddressMode) -> UInt8 {
         // We assume IMP address mode.
-        status.setOptions(.disableInterrupts, enabled: true)
+        status.insert(.disableInterrupts)
         return 0
     }
     
