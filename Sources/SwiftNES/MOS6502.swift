@@ -98,6 +98,9 @@ final class MOS6502 {
             totalCycleCount += 1
         }
         
+        // We effectively do all of our work on the first cycle, and then wait the
+        // predetermined amount of cycles that the instruction would normally take
+        // to execute.
         guard cyclesRemaining == 0 else { return }
         
         // Read the next instruction byte. This 8-bit value is used to index the
@@ -127,15 +130,9 @@ final class MOS6502 {
         status.insert(.unused)
     }
     
-    /// Forces the CPU into a known state.
+    /// Resets the CPU to a known state and sets the program counter to a predetermined address.
     ///
-    /// This is hard-wired inside the CPU. The registers are set to 0x00, the
-    /// status register is cleared except for unused bit which remains at 1.
-    /// An absolute address is read from location 0xFFFC which contains a second
-    /// address that the program counter is set to. This allows the programmer
-    /// to jump to a known and programmable location in the memory to start
-    /// executing from. Typically the programmer would set the value at location
-    /// 0xFFFC at compile time.
+    /// - note: Startup code should be placed at `0xfffc`.
     func reset() {
         // Get the address to set the program counter to.
         // The address is contained at 0xfffc
@@ -159,18 +156,11 @@ final class MOS6502 {
     
     /// Interrupts execution and executes an instruction at a specified location.
     ///
-    /// Interrupt requests only happen if the `status` does not contain the
-    /// `.disableInterrupts` option. IRQs can happen at any time, but the current
-    /// instruction is allowed to finish before the IRQ is handled.
+    /// - note: Interrupt requests only happen if `status` does not contain the `.disableInterrupts` option.
     ///
-    /// When ready, the current program counter is stored on the stack. Then the
-    /// current status register is stored on the stack. When the routine
-    /// that services the interrupt has finished, the status register
-    /// and program counter can be restored to how they where before it
-    /// occurred. This is impemented by the "RTI" instruction. Once the IRQ
-    /// has happened, in a similar way to a reset, a programmable address
-    /// is read form hard coded location 0xFFFE, which is subsequently
-    /// set to the program counter.
+    /// The current instruction is allowed to finish before the interrupt request is handled. When the interrupt request is
+    /// handled, the current program counter and status register are stored on the stack. Then the program counter is
+    /// set to `0xfffe`, where it will begin executing code.
     func irq() {
         guard !status.contains(.disableInterrupts) else { return }
         
@@ -1128,17 +1118,14 @@ extension MOS6502 {
 
     /// Implied
     ///
-    /// There is no additional data required for this instruction. The instruction
-    /// does something very simple like like sets a status bit. However, we will
-    /// target the accumulator, for instructions like PHA
+    /// There is no additional data required for this instruction.
     private func IMP() -> ReadAddressResult {
         return (pc, false)
     }
     
     /// Immediate
     ///
-    /// The instruction expects the next byte to be used as a value, so we'll prep
-    /// the read address to point to the next byte
+    /// The next byte is used as a value.
     private func IMM() -> ReadAddressResult {
         let address = pc
         pc += 1
@@ -1162,9 +1149,7 @@ extension MOS6502 {
     
     /// Absolute with X Offset
     ///
-    /// Fundamentally the same as absolute addressing, but the contents of the X Register
-    /// is added to the supplied two byte address. If the resulting address changes
-    /// the page, an additional clock cycle is required
+    /// The same as `ABS`, but the value of the `x` register is added to the address.
     private func ABX() -> ReadAddressResult {
         let lo = UInt16(bus.read(from: pc))
         pc += 1
@@ -1181,9 +1166,7 @@ extension MOS6502 {
     
     /// Absolute with Y Offset
     ///
-    /// Fundamentally the same as absolute addressing, but the contents of the Y Register
-    /// is added to the supplied two byte address. If the resulting address changes
-    /// the page, an additional clock cycle is required
+    /// The same as `ABS`, but the value of the `y` register is added to the address.
     private func ABY() -> ReadAddressResult {
         let lo = UInt16(bus.read(from: pc))
         pc += 1
@@ -1200,9 +1183,7 @@ extension MOS6502 {
     
     /// Relative
     ///
-    /// This address mode is exclusive to branch instructions. The address
-    /// must reside within -128 to +127 of the branch instruction, i.e.
-    /// you cant directly branch to any address in the addressable range.
+    /// The read address is used as a relative offset to the current address of the program counter.
     private func REL() -> ReadAddressResult {
         var relativeAddress = UInt16(bus.read(from: pc))
         pc += 1
@@ -1216,9 +1197,8 @@ extension MOS6502 {
     
     /// Zero Page
     ///
-    /// To save program bytes, zero page addressing allows you to absolutely address
-    /// a location in first 0xFF bytes of address range. Clearly this only requires
-    /// one byte instead of the usual two.
+    /// Allows addressing an absolute address in the first `0xff` bytes of the address range using
+    /// only a single byte.
     private func ZP0() -> ReadAddressResult {
         var address = UInt16(bus.read(from: pc))
         address &= 0x00ff
@@ -1229,9 +1209,8 @@ extension MOS6502 {
     
     /// Zero Page with X Offset
     ///
-    /// Fundamentally the same as Zero Page addressing, but the contents of the X Register
-    /// is added to the supplied single byte address. This is useful for iterating through
-    /// ranges within the first page.
+    /// Allows addressing an absolute address in the first `0xff` bytes of the address range using
+    /// the value of the `x` register.
     private func ZPX() -> ReadAddressResult {
         var address = UInt16(bus.read(from: pc + UInt16(x)))
         address &= 0x00ff
@@ -1242,9 +1221,8 @@ extension MOS6502 {
     
     /// Zero Page with Y Offset
     ///
-    /// Fundamentally the same as Zero Page addressing, but the contents of the Y Register
-    /// is added to the supplied single byte address. This is useful for iterating through
-    /// ranges within the first page.
+    /// Allows addressing an absolute address in the first `0xff` bytes of the address range using
+    /// the value of the `y` register.
     private func ZPY() -> ReadAddressResult {
         var address = UInt16(bus.read(from: pc + UInt16(y)))
         address &= 0x00ff
@@ -1255,13 +1233,7 @@ extension MOS6502 {
     
     /// Indirect
     ///
-    /// The supplied 16-bit address is read to get the actual 16-bit address. This is
-    /// instruction is unusual in that it has a bug in the hardware! To emulate its
-    /// function accurately, we also need to emulate this bug. If the low byte of the
-    /// supplied address is 0xFF, then to read the high byte of the actual address
-    /// we need to cross a page boundary. This doesnt actually work on the chip as
-    /// designed, instead it wraps back around in the same page, yielding an
-    /// invalid actual address
+    /// Reads an address that points to another address where the actual value is stored.
     private func IND() -> ReadAddressResult {
         let ptrLo = UInt16(bus.read(from: pc))
         pc += 1
@@ -1282,9 +1254,7 @@ extension MOS6502 {
     
     /// Indirect X
     ///
-    /// The supplied 8-bit address is offset by X Register to index
-    /// a location in page 0x00. The actual 16-bit address is read
-    /// from this location
+    /// The 8-bit address is offset by the value of the `x` register to index a location in the first page.
     private func IZX() -> ReadAddressResult {
         let ptr = UInt16(bus.read(from: pc))
         pc += 1
@@ -1298,10 +1268,8 @@ extension MOS6502 {
     
     /// Indirect Y
     ///
-    /// The supplied 8-bit address indexes a location in page 0x00. From
-    /// here the actual 16-bit address is read, and the contents of
-    /// Y Register is added to it to offset it. If the offset causes a
-    /// change in page then an additional clock cycle is required.
+    /// The 8-bit address is indexes a location in the first page. The value in the `y` register are used to
+    /// offset this address.
     private func IZY() -> ReadAddressResult {
         let ptr = UInt16(bus.read(from: pc))
         pc += 1
