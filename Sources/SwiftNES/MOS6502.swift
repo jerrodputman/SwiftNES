@@ -27,15 +27,12 @@ final class MOS6502 {
     
     // MARK: - Initializers
     
+    /// Creates a virtual CPU with the specified bus.
+    ///
+    /// - parameter bus: The bus that the CPU should use to communicate with other devices.
     init(bus: Bus) {
         self.bus = bus
     }
-    
-    
-    // MARK: - Accessing the bus
-    
-    /// The bus that allows the CPU to read/write data from/to any bus-attached devices.
-    let bus: Bus
     
     
     // MARK: - Registers
@@ -115,17 +112,16 @@ final class MOS6502 {
         pc += 1
         
         // Get the instruction from the opcode.
-        let instruction = instructions[Int(opcode)]
+        let instruction = MOS6502.instructions[Int(opcode)]
         
-        // Get the number of cycles for the instruction.
-        cyclesRemaining = instruction.cycleCount
+        // Get the minimum number of cycles for the instruction.
+        cyclesRemaining = instruction.minimumCycleCount
         
         // Perform the operation.
-        let additionalCycles = instruction.operation(instruction.addressMode)
-        
+        //
         // The address mode and operation may have altered the number of cycles this
         // instruction requires before it completes.
-        cyclesRemaining += additionalCycles
+        cyclesRemaining += perform(instruction.operation, using: instruction.addressMode)
         
         // Always set the unused flag.
         status.insert(.unused)
@@ -155,7 +151,7 @@ final class MOS6502 {
         x = 0x00
         y = 0x00
         stkp = 0xfd
-        status = [.unused]
+        status = .unused
         
         // Reset interrupts takes time.
         cyclesRemaining = 8
@@ -252,6 +248,9 @@ final class MOS6502 {
     
     // MARK: - Private
     
+    /// The bus that allows the CPU to read/write data from/to any bus-attached devices.
+    private let bus: Bus
+    
     /// The working instruction byte.
     private var opcode: UInt8 = 0x00
     
@@ -259,503 +258,439 @@ final class MOS6502 {
     private var cyclesRemaining: UInt8 = 0x00
     
     
-    private func fetch() -> UInt8 {
+    /// Performs the specified operation using the specified address mode.
+    ///
+    /// - parameter operation: The operation to perform.
+    /// - parameter addressMode: The address mode that the operation should use.
+    /// - returns: The additional number of cycles that the operation needs to complete.
+    private func perform(_ operation: Operation, using addressMode: AddressMode) -> UInt8 {
+        let (address, crossedPageBoundary) = readAddress(using: addressMode)
+        
+        switch operation {
+        case .ADC: return ADC(address, crossedPageBoundary)
+        case .SBC: return SBC(address, crossedPageBoundary)
+        case .AND: return AND(address, crossedPageBoundary)
+        case .ASL: ASL(address, addressMode)
+        case .BCS: return BCS(address)
+        case .BCC: return BCC(address)
+        case .BEQ: return BEQ(address)
+        case .BNE: return BNE(address)
+        case .BMI: return BMI(address)
+        case .BPL: return BPL(address)
+        case .BVS: return BVS(address)
+        case .BVC: return BVC(address)
+        case .BIT: BIT(address)
+        case .BRK: BRK()
+        case .CLC: CLC()
+        case .CLD: CLD()
+        case .CLI: CLI()
+        case .CLV: CLV()
+        case .CMP: return CMP(address, crossedPageBoundary)
+        case .CPX: return CPX(address, crossedPageBoundary)
+        case .CPY: return CPY(address, crossedPageBoundary)
+        case .DEC: DEC(address)
+        case .DEX: DEX()
+        case .DEY: DEY()
+        case .EOR: EOR(address)
+        case .INC: INC(address)
+        case .INX: INX()
+        case .INY: INY()
+        case .JMP: JMP(address)
+        case .JSR: JSR(address)
+        case .LDA: return LDA(address, crossedPageBoundary)
+        case .LDX: return LDX(address, crossedPageBoundary)
+        case .LDY: return LDY(address, crossedPageBoundary)
+        case .LSR: LSR(address, addressMode)
+        case .NOP: return NOP(crossedPageBoundary)
+        case .ORA: return ORA(address, crossedPageBoundary)
+        case .PHA: PHA()
+        case .PHP: PHP()
+        case .PLA: PLA()
+        case .PLP: PLP()
+        case .ROL: ROL(address, addressMode)
+        case .ROR: ROR(address, addressMode)
+        case .RTI: RTI()
+        case .RTS: RTS()
+        case .SEC: SEC()
+        case .SED: SED()
+        case .SEI: SEI()
+        case .STA: STA(address)
+        case .STX: STX(address)
+        case .STY: STY(address)
+        case .TAX: TAX()
+        case .TAY: TAY()
+        case .TSX: TSX()
+        case .TXA: TXA()
+        case .TYA: TYA()
+        case .TXS: TXS()
+            
+        case .XXX:
+            break
+        }
+        
         return 0
     }
-    
-    
-    private struct Instruction {
-        let name: String
-        let operation: ((_ addressMode: AddressMode) -> UInt8)
-        let addressMode: AddressMode
-        let cycleCount: UInt8
-    }
-    
-    lazy private var instructions: [Instruction] = {
-        return [
-        Instruction(name: "BRK", operation: BRK, addressMode: .IMM, cycleCount: 7),
-        Instruction(name: "ORA", operation: ORA, addressMode: .IZX, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 3),
-        Instruction(name: "ORA", operation: ORA, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "ASL", operation: ASL, addressMode: .ZP0, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 5),
-        Instruction(name: "PHP", operation: PHP, addressMode: .IMP, cycleCount: 3),
-        Instruction(name: "ORA", operation: ORA, addressMode: .IMM, cycleCount: 2),
-        Instruction(name: "ASL", operation: ASL, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "ORA", operation: ORA, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "ASL", operation: ASL, addressMode: .ABS, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
 
-        Instruction(name: "BPL", operation: BPL, addressMode: .REL, cycleCount: 2),
-        Instruction(name: "ORA", operation: ORA, addressMode: .IZY, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "ORA", operation: ORA, addressMode: .ZPX, cycleCount: 4),
-        Instruction(name: "ASL", operation: ASL, addressMode: .ZPX, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "CLC", operation: CLC, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "ORA", operation: ORA, addressMode: .ABY, cycleCount: 4),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "ORA", operation: ORA, addressMode: .ABX, cycleCount: 4),
-        Instruction(name: "ASL", operation: ASL, addressMode: .ABX, cycleCount: 7),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-        
-        Instruction(name: "JSR", operation: JSR, addressMode: .ABS, cycleCount: 6),
-        Instruction(name: "AND", operation: AND, addressMode: .IZX, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "BIT", operation: BIT, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "AND", operation: AND, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "ROL", operation: ROL, addressMode: .ZP0, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 5),
-        Instruction(name: "PLP", operation: PLP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "AND", operation: AND, addressMode: .IMM, cycleCount: 2),
-        Instruction(name: "ROL", operation: ROL, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "BIT", operation: BIT, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "AND", operation: AND, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "ROL", operation: ROL, addressMode: .ABS, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        
-        Instruction(name: "BMI", operation: BMI, addressMode: .REL, cycleCount: 2),
-        Instruction(name: "AND", operation: AND, addressMode: .IZY, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "AND", operation: AND, addressMode: .ZPX, cycleCount: 4),
-        Instruction(name: "ROL", operation: ROL, addressMode: .ZPX, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        Instruction(name: "SEC", operation: SEC, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "AND", operation: AND, addressMode: .ABY, cycleCount: 4),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "AND", operation: AND, addressMode: .ABX, cycleCount: 4),
-        Instruction(name: "ROL", operation: ROL, addressMode: .ABX, cycleCount: 7),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-        
-        Instruction(name: "RTI", operation: RTI, addressMode: .IMP, cycleCount: 6),
-        Instruction(name: "EOR", operation: EOR, addressMode: .IZX, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 3),
-        Instruction(name: "EOR", operation: EOR, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "LSR", operation: LSR, addressMode: .ZP0, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 5),
-        Instruction(name: "PHA", operation: PHA, addressMode: .IMP, cycleCount: 3),
-        Instruction(name: "EOR", operation: EOR, addressMode: .IMM, cycleCount: 2),
-        Instruction(name: "LSR", operation: LSR, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "JMP", operation: JMP, addressMode: .ABS, cycleCount: 3),
-        Instruction(name: "EOR", operation: EOR, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "LSR", operation: LSR, addressMode: .ABS, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        
-        Instruction(name: "BVC", operation: BVC, addressMode: .REL, cycleCount: 2),
-        Instruction(name: "EOR", operation: EOR, addressMode: .IZY, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "EOR", operation: EOR, addressMode: .ZPX, cycleCount: 4),
-        Instruction(name: "LSR", operation: LSR, addressMode: .ZPX, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        Instruction(name: "CLI", operation: CLI, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "EOR", operation: EOR, addressMode: .ABY, cycleCount: 4),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "EOR", operation: EOR, addressMode: .ABX, cycleCount: 4),
-        Instruction(name: "LSR", operation: LSR, addressMode: .ABX, cycleCount: 7),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-        
-        Instruction(name: "RTS", operation: RTS, addressMode: .IMP, cycleCount: 6),
-        Instruction(name: "ADC", operation: ADC, addressMode: .IZX, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 3),
-        Instruction(name: "ADC", operation: ADC, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "ROR", operation: ROR, addressMode: .ZP0, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 5),
-        Instruction(name: "PLA", operation: PLA, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "ADC", operation: ADC, addressMode: .IMM, cycleCount: 2),
-        Instruction(name: "ROR", operation: ROR, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "JMP", operation: JMP, addressMode: .IND, cycleCount: 5),
-        Instruction(name: "ADC", operation: ADC, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "ROR", operation: ROR, addressMode: .ABS, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        
-        Instruction(name: "BVS", operation: BVS, addressMode: .REL, cycleCount: 2),
-        Instruction(name: "ADC", operation: ADC, addressMode: .IZY, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "ADC", operation: ADC, addressMode: .ZPX, cycleCount: 4),
-        Instruction(name: "ROR", operation: ROR, addressMode: .ZPX, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        Instruction(name: "SEI", operation: SEI, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "ADC", operation: ADC, addressMode: .ABY, cycleCount: 4),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "ADC", operation: ADC, addressMode: .ABX, cycleCount: 4),
-        Instruction(name: "ROR", operation: ROR, addressMode: .ABX, cycleCount: 7),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-        
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "STA", operation: STA, addressMode: .IZX, cycleCount: 6),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        Instruction(name: "STY", operation: STY, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "STA", operation: STA, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "STX", operation: STX, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 3),
-        Instruction(name: "DEY", operation: DEY, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "TXA", operation: TXA, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "STY", operation: STY, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "STA", operation: STA, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "STX", operation: STX, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 4),
-        
-        Instruction(name: "BCC", operation: BCC, addressMode: .REL, cycleCount: 2),
-        Instruction(name: "STA", operation: STA, addressMode: .IZY, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        Instruction(name: "STY", operation: STY, addressMode: .ZPX, cycleCount: 4),
-        Instruction(name: "STA", operation: STA, addressMode: .ZPX, cycleCount: 4),
-        Instruction(name: "STX", operation: STX, addressMode: .ZPY, cycleCount: 4),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "TYA", operation: TYA, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "STA", operation: STA, addressMode: .ABY, cycleCount: 5),
-        Instruction(name: "TXS", operation: TXS, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 5),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 5),
-        Instruction(name: "STA", operation: STA, addressMode: .ABX, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 5),
-        
-        Instruction(name: "LDY", operation: LDY, addressMode: .IMM, cycleCount: 2),
-        Instruction(name: "LDA", operation: LDA, addressMode: .IZX, cycleCount: 6),
-        Instruction(name: "LDX", operation: LDX, addressMode: .IMM, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        Instruction(name: "LDY", operation: LDY, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "LDA", operation: LDA, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "LDX", operation: LDX, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 3),
-        Instruction(name: "TAY", operation: TAY, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "LDA", operation: LDA, addressMode: .IMM, cycleCount: 2),
-        Instruction(name: "TAX", operation: TAX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "LDY", operation: LDY, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "LDA", operation: LDA, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "LDX", operation: LDX, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 4),
-        
-        Instruction(name: "BCS", operation: BCS, addressMode: .REL, cycleCount: 2),
-        Instruction(name: "LDA", operation: LDA, addressMode: .IZY, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 5),
-        Instruction(name: "LDY", operation: LDY, addressMode: .ZPX, cycleCount: 4),
-        Instruction(name: "LDA", operation: LDA, addressMode: .ZPX, cycleCount: 4),
-        Instruction(name: "LDX", operation: LDX, addressMode: .ZPY, cycleCount: 4),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "CLV", operation: CLV, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "LDA", operation: LDA, addressMode: .ABY, cycleCount: 4),
-        Instruction(name: "TSX", operation: TSX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "LDY", operation: LDY, addressMode: .ABX, cycleCount: 4),
-        Instruction(name: "LDA", operation: LDA, addressMode: .ABX, cycleCount: 4),
-        Instruction(name: "LDX", operation: LDX, addressMode: .ABY, cycleCount: 4),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 4),
-        
-        Instruction(name: "CPY", operation: CPY, addressMode: .IMM, cycleCount: 2),
-        Instruction(name: "CMP", operation: CMP, addressMode: .IZX, cycleCount: 6),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "CPY", operation: LDY, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "CMP", operation: CMP, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "DEC", operation: DEC, addressMode: .ZP0, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 5),
-        Instruction(name: "INY", operation: INY, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "CMP", operation: CMP, addressMode: .IMM, cycleCount: 2),
-        Instruction(name: "DEX", operation: DEX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "CPY", operation: CPY, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "CMP", operation: CMP, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "DEC", operation: DEC, addressMode: .ABS, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        
-        Instruction(name: "BNE", operation: BNE, addressMode: .REL, cycleCount: 2),
-        Instruction(name: "CMP", operation: CMP, addressMode: .IZY, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "CMP", operation: CMP, addressMode: .ZPX, cycleCount: 4),
-        Instruction(name: "DEC", operation: DEC, addressMode: .ZPX, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        Instruction(name: "CLD", operation: CLD, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "CMP", operation: CMP, addressMode: .ABY, cycleCount: 4),
-        Instruction(name: "NOP", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "CMP", operation: CMP, addressMode: .ABX, cycleCount: 4),
-        Instruction(name: "DEC", operation: DEC, addressMode: .ABX, cycleCount: 7),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-        
-        Instruction(name: "CPX", operation: CPX, addressMode: .IMM, cycleCount: 2),
-        Instruction(name: "SBC", operation: SBC, addressMode: .IZX, cycleCount: 6),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "CPX", operation: CPX, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "SBC", operation: SBC, addressMode: .ZP0, cycleCount: 3),
-        Instruction(name: "INC", operation: INC, addressMode: .ZP0, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 5),
-        Instruction(name: "INX", operation: INX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "SBC", operation: SBC, addressMode: .IMM, cycleCount: 2),
-        Instruction(name: "NOP", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: SBC, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "CPX", operation: CPX, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "SBC", operation: SBC, addressMode: .ABS, cycleCount: 4),
-        Instruction(name: "INC", operation: INC, addressMode: .ABS, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        
-        Instruction(name: "BEQ", operation: BEQ, addressMode: .REL, cycleCount: 2),
-        Instruction(name: "SBC", operation: SBC, addressMode: .IZY, cycleCount: 5),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 8),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "SBC", operation: SBC, addressMode: .ZPX, cycleCount: 4),
-        Instruction(name: "INC", operation: INC, addressMode: .ZPX, cycleCount: 6),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 6),
-        Instruction(name: "SED", operation: SED, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "SBC", operation: SBC, addressMode: .ABY, cycleCount: 4),
-        Instruction(name: "NOP", operation: NOP, addressMode: .IMP, cycleCount: 2),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-        Instruction(name: "???", operation: NOP, addressMode: .IMP, cycleCount: 4),
-        Instruction(name: "SBC", operation: SBC, addressMode: .ABX, cycleCount: 4),
-        Instruction(name: "INC", operation: INC, addressMode: .ABX, cycleCount: 7),
-        Instruction(name: "???", operation: XXX, addressMode: .IMP, cycleCount: 7),
-    ]
-    }()
+    /// Reads the address from the current program counter location using the specified address mode.
+    ///
+    /// - note: This method may update the program counter.
+    ///
+    /// - parameter addressMode: The address mode to use.
+    /// - returns: A `ReadAddressResult` which contains the address that was read and whether or not the read crossed a page boundary.
+    private func readAddress(using addressMode: AddressMode) -> ReadAddressResult {
+        switch addressMode {
+        case .IMP:  return IMP()
+        case .IMM:  return IMM()
+        case .ABS:  return ABS()
+        case .ABX:  return ABX()
+        case .ABY:  return ABY()
+        case .REL:  return REL()
+        case .ZP0:  return ZP0()
+        case .ZPX:  return ZPX()
+        case .ZPY:  return ZPY()
+        case .IND:  return IND()
+        case .IZX:  return IZX()
+        case .IZY:  return IZY()
+        }
+    }
 }
 
 
-// MARK: - Address Modes
+// MARK: - Instructions
 
 extension MOS6502 {
-    enum AddressMode {
-        /// Implied
-        ///
-        /// There is no additional data required for this instruction. The instruction
-        /// does something very simple like like sets a status bit. However, we will
-        /// target the accumulator, for instructions like PHA
-        case IMP
+    /// A structure representing a single instruction to be performed by the CPU.
+    private struct Instruction {
+        /// The assembly mnemonic used for the instruction.
+        let name: String
         
-        /// Immediate
-        ///
-        /// The instruction expects the next byte to be used as a value, so we'll prep
-        /// the read address to point to the next byte
-        case IMM
+        /// The `Operation` to perform for this instruction.
+        let operation: Operation
         
-        /// Absolute
-        ///
-        /// A full 16-bit address is loaded and used
-        case ABS
+        /// The `AddressMode` that the operation should use while performing the instruction.
+        let addressMode: AddressMode
         
-        /// Absolute with X Offset
-        ///
-        /// Fundamentally the same as absolute addressing, but the contents of the X Register
-        /// is added to the supplied two byte address. If the resulting address changes
-        /// the page, an additional clock cycle is required
-        case ABX
-        
-        /// Absolute with Y Offset
-        ///
-        /// Fundamentally the same as absolute addressing, but the contents of the Y Register
-        /// is added to the supplied two byte address. If the resulting address changes
-        /// the page, an additional clock cycle is required
-        case ABY
-        
-        /// Relative
-        ///
-        /// This address mode is exclusive to branch instructions. The address
-        /// must reside within -128 to +127 of the branch instruction, i.e.
-        /// you cant directly branch to any address in the addressable range.
-        case REL
-        
-        /// Zero Page
-        ///
-        /// To save program bytes, zero page addressing allows you to absolutely address
-        /// a location in first 0xFF bytes of address range. Clearly this only requires
-        /// one byte instead of the usual two.
-        case ZP0
-        
-        /// Zero Page with X Offset
-        ///
-        /// Fundamentally the same as Zero Page addressing, but the contents of the X Register
-        /// is added to the supplied single byte address. This is useful for iterating through
-        /// ranges within the first page.
-        case ZPX
-        
-        /// Zero Page with Y Offset
-        ///
-        /// Fundamentally the same as Zero Page addressing, but the contents of the Y Register
-        /// is added to the supplied single byte address. This is useful for iterating through
-        /// ranges within the first page.
-        case ZPY
-        
-        /// Indirect
-        ///
-        /// The supplied 16-bit address is read to get the actual 16-bit address. This is
-        /// instruction is unusual in that it has a bug in the hardware! To emulate its
-        /// function accurately, we also need to emulate this bug. If the low byte of the
-        /// supplied address is 0xFF, then to read the high byte of the actual address
-        /// we need to cross a page boundary. This doesnt actually work on the chip as
-        /// designed, instead it wraps back around in the same page, yielding an
-        /// invalid actual address
-        case IND
-        
-        /// Indirect X
-        ///
-        /// The supplied 8-bit address is offset by X Register to index
-        /// a location in page 0x00. The actual 16-bit address is read
-        /// from this location
-        case IZX
-        
-        /// Indirect Y
-        ///
-        /// The supplied 8-bit address indexes a location in page 0x00. From
-        /// here the actual 16-bit address is read, and the contents of
-        /// Y Register is added to it to offset it. If the offset causes a
-        /// change in page then an additional clock cycle is required.
-        case IZY
-    }
-    
-    private func readAddress(using addressMode: AddressMode) -> (address: UInt16, bytesRead: UInt16, crossedPageBoundary: Bool) {
-        switch addressMode {
-        case .IMP:
-            return (pc, 0, false)
-            
-        case .IMM:
-            return (pc, 1, false)
-            
-        case .ABS:
-            let lo = UInt16(bus.read(from: pc))
-            let hi = UInt16(bus.read(from: pc + 1))
-            let address = (hi << 8) | lo
-            
-            return (address, 2, false)
-            
-        case .ABX:
-            let lo = UInt16(bus.read(from: pc))
-            let hi = UInt16(bus.read(from: pc + 1))
-            var address = (hi << 8) | lo
-            address += UInt16(x)
-            let crossedPageBoundary = (address & 0xff00) != (hi << 8)
-            
-            return (address, 2, crossedPageBoundary)
-            
-        case .ABY:
-            let lo = UInt16(bus.read(from: pc))
-            let hi = UInt16(bus.read(from: pc + 1))
-            var address = (hi << 8) | lo
-            address += UInt16(y)
-            let crossedPageBoundary = (address & 0xff00) != (hi << 8)
-            
-            return (address, 2, crossedPageBoundary)
-            
-        case .REL:
-            var relativeAddress = UInt16(bus.read(from: pc))
-            if (relativeAddress & 0x80) > 0 {
-                relativeAddress |= 0xFF00;
-            }
-            return (relativeAddress, 1, false)
-            
-        case .ZP0:
-            var address = UInt16(bus.read(from: pc))
-            address &= 0x00ff
-            return (address, 1, false)
-            
-        case .ZPX:
-            var address = UInt16(bus.read(from: pc + UInt16(x)))
-            address &= 0x00ff
-            return (address, 1, false)
-            
-        case .ZPY:
-            var address = UInt16(bus.read(from: pc + UInt16(y)))
-            address &= 0x00ff
-            return (address, 1, false)
-            
-        case .IND:
-            let ptrLo = UInt16(bus.read(from: pc))
-            let ptrHi = UInt16(bus.read(from: pc + 1))
-            let ptr = (ptrHi << 8) | ptrLo
+        /// The minimum number of cycles that the instruction requires to complete.
+        let minimumCycleCount: UInt8
 
-            let address: UInt16
-            if (ptrLo == 0x00ff) { // Simulate page boundary hardware bug.
-                address = (UInt16(bus.read(from: ptr & 0xff00)) << 8) | UInt16(bus.read(from: ptr + 0))
-            } else {
-                address = (UInt16(bus.read(from: ptr + 1)) << 8) | UInt16(bus.read(from: ptr + 0))
-            }
-            
-            return (address, 2, false)
-
-        case .IZX:
-            let ptr = UInt16(bus.read(from: pc))
-            let lo = UInt16(bus.read(from: (ptr + UInt16(x)) & 0x00ff))
-            let hi = UInt16(bus.read(from: (ptr + UInt16(x) + 1) & 0xff00))
-            let address = (hi << 8) | lo
-            
-            return (address, 1, false)
-
-        case .IZY:
-            let ptr = UInt16(bus.read(from: pc))
-            let lo = UInt16(bus.read(from: ptr & 0x00ff))
-            let hi = UInt16(bus.read(from: (ptr + 1) & 0xff00))
-            var address = (hi << 8) | lo
-            address += UInt16(y)
-            let crossedPageBoundary = (address & 0xff00) != (hi << 8)
-            
-            return (address, 1, crossedPageBoundary)
+        
+        /// Creates a new instruction.
+        init(_ name: String, _ operation: Operation, _ addressMode: AddressMode, _ minimumCycleCount: UInt8) {
+            self.name = name
+            self.operation = operation
+            self.addressMode = addressMode
+            self.minimumCycleCount = minimumCycleCount
         }
     }
+    
+    /// An array of all of the possible instructions that the CPU can perform.
+    ///
+    /// The array can be indexed via an `Opcode`.
+    static private var instructions: [Instruction] = {
+        return [
+            Instruction("BRK", .BRK, .IMM, 7),
+            Instruction("ORA", .ORA, .IZX, 6),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("???", .NOP, .IMP, 3),
+            Instruction("ORA", .ORA, .ZP0, 3),
+            Instruction("ASL", .ASL, .ZP0, 5),
+            Instruction("???", .XXX, .IMP, 5),
+            Instruction("PHP", .PHP, .IMP, 3),
+            Instruction("ORA", .ORA, .IMM, 2),
+            Instruction("ASL", .ASL, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("ORA", .ORA, .ABS, 4),
+            Instruction("ASL", .ASL, .ABS, 6),
+            Instruction("???", .XXX, .IMP, 6),
+
+            Instruction("BPL", .BPL, .REL, 2),
+            Instruction("ORA", .ORA, .IZY, 5),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("ORA", .ORA, .ZPX, 4),
+            Instruction("ASL", .ASL, .ZPX, 6),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("CLC", .CLC, .IMP, 2),
+            Instruction("ORA", .ORA, .ABY, 4),
+            Instruction("???", .NOP, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 7),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("ORA", .ORA, .ABX, 4),
+            Instruction("ASL", .ASL, .ABX, 7),
+            Instruction("???", .XXX, .IMP, 7),
+        
+            Instruction("JSR", .JSR, .ABS, 6),
+            Instruction("AND", .AND, .IZX, 6),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("BIT", .BIT, .ZP0, 3),
+            Instruction("AND", .AND, .ZP0, 3),
+            Instruction("ROL", .ROL, .ZP0, 5),
+            Instruction("???", .XXX, .IMP, 5),
+            Instruction("PLP", .PLP, .IMP, 4),
+            Instruction("AND", .AND, .IMM, 2),
+            Instruction("ROL", .ROL, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("BIT", .BIT, .ABS, 4),
+            Instruction("AND", .AND, .ABS, 4),
+            Instruction("ROL", .ROL, .ABS, 6),
+            Instruction("???", .XXX, .IMP, 6),
+        
+            Instruction("BMI", .BMI, .REL, 2),
+            Instruction("AND", .AND, .IZY, 5),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("AND", .AND, .ZPX, 4),
+            Instruction("ROL", .ROL, .ZPX, 6),
+            Instruction("???", .XXX, .IMP, 6),
+            Instruction("SEC", .SEC, .IMP, 2),
+            Instruction("AND", .AND, .ABY, 4),
+            Instruction("???", .NOP, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 7),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("AND", .AND, .ABX, 4),
+            Instruction("ROL", .ROL, .ABX, 7),
+            Instruction("???", .XXX, .IMP, 7),
+        
+            Instruction("RTI", .RTI, .IMP, 6),
+            Instruction("EOR", .EOR, .IZX, 6),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("???", .NOP, .IMP, 3),
+            Instruction("EOR", .EOR, .ZP0, 3),
+            Instruction("LSR", .LSR, .ZP0, 5),
+            Instruction("???", .XXX, .IMP, 5),
+            Instruction("PHA", .PHA, .IMP, 3),
+            Instruction("EOR", .EOR, .IMM, 2),
+            Instruction("LSR", .LSR, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("JMP", .JMP, .ABS, 3),
+            Instruction("EOR", .EOR, .ABS, 4),
+            Instruction("LSR", .LSR, .ABS, 6),
+            Instruction("???", .XXX, .IMP, 6),
+        
+            Instruction("BVC", .BVC, .REL, 2),
+            Instruction("EOR", .EOR, .IZY, 5),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("EOR", .EOR, .ZPX, 4),
+            Instruction("LSR", .LSR, .ZPX, 6),
+            Instruction("???", .XXX, .IMP, 6),
+            Instruction("CLI", .CLI, .IMP, 2),
+            Instruction("EOR", .EOR, .ABY, 4),
+            Instruction("???", .NOP, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 7),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("EOR", .EOR, .ABX, 4),
+            Instruction("LSR", .LSR, .ABX, 7),
+            Instruction("???", .XXX, .IMP, 7),
+        
+            Instruction("RTS", .RTS, .IMP, 6),
+            Instruction("ADC", .ADC, .IZX, 6),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("???", .NOP, .IMP, 3),
+            Instruction("ADC", .ADC, .ZP0, 3),
+            Instruction("ROR", .ROR, .ZP0, 5),
+            Instruction("???", .XXX, .IMP, 5),
+            Instruction("PLA", .PLA, .IMP, 4),
+            Instruction("ADC", .ADC, .IMM, 2),
+            Instruction("ROR", .ROR, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("JMP", .JMP, .IND, 5),
+            Instruction("ADC", .ADC, .ABS, 4),
+            Instruction("ROR", .ROR, .ABS, 6),
+            Instruction("???", .XXX, .IMP, 6),
+        
+            Instruction("BVS", .BVS, .REL, 2),
+            Instruction("ADC", .ADC, .IZY, 5),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("ADC", .ADC, .ZPX, 4),
+            Instruction("ROR", .ROR, .ZPX, 6),
+            Instruction("???", .XXX, .IMP, 6),
+            Instruction("SEI", .SEI, .IMP, 2),
+            Instruction("ADC", .ADC, .ABY, 4),
+            Instruction("???", .NOP, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 7),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("ADC", .ADC, .ABX, 4),
+            Instruction("ROR", .ROR, .ABX, 7),
+            Instruction("???", .XXX, .IMP, 7),
+        
+            Instruction("???", .NOP, .IMP, 2),
+            Instruction("STA", .STA, .IZX, 6),
+            Instruction("???", .NOP, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 6),
+            Instruction("STY", .STY, .ZP0, 3),
+            Instruction("STA", .STA, .ZP0, 3),
+            Instruction("STX", .STX, .ZP0, 3),
+            Instruction("???", .XXX, .IMP, 3),
+            Instruction("DEY", .DEY, .IMP, 2),
+            Instruction("???", .NOP, .IMP, 2),
+            Instruction("TXA", .TXA, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("STY", .STY, .ABS, 4),
+            Instruction("STA", .STA, .ABS, 4),
+            Instruction("STX", .STX, .ABS, 4),
+            Instruction("???", .XXX, .IMP, 4),
+        
+            Instruction("BCC", .BCC, .REL, 2),
+            Instruction("STA", .STA, .IZY, 6),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 6),
+            Instruction("STY", .STY, .ZPX, 4),
+            Instruction("STA", .STA, .ZPX, 4),
+            Instruction("STX", .STX, .ZPY, 4),
+            Instruction("???", .XXX, .IMP, 4),
+            Instruction("TYA", .TYA, .IMP, 2),
+            Instruction("STA", .STA, .ABY, 5),
+            Instruction("TXS", .TXS, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 5),
+            Instruction("???", .NOP, .IMP, 5),
+            Instruction("STA", .STA, .ABX, 5),
+            Instruction("???", .XXX, .IMP, 5),
+            Instruction("???", .XXX, .IMP, 5),
+        
+            Instruction("LDY", .LDY, .IMM, 2),
+            Instruction("LDA", .LDA, .IZX, 6),
+            Instruction("LDX", .LDX, .IMM, 2),
+            Instruction("???", .XXX, .IMP, 6),
+            Instruction("LDY", .LDY, .ZP0, 3),
+            Instruction("LDA", .LDA, .ZP0, 3),
+            Instruction("LDX", .LDX, .ZP0, 3),
+            Instruction("???", .XXX, .IMP, 3),
+            Instruction("TAY", .TAY, .IMP, 2),
+            Instruction("LDA", .LDA, .IMM, 2),
+            Instruction("TAX", .TAX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("LDY", .LDY, .ABS, 4),
+            Instruction("LDA", .LDA, .ABS, 4),
+            Instruction("LDX", .LDX, .ABS, 4),
+            Instruction("???", .XXX, .IMP, 4),
+        
+            Instruction("BCS", .BCS, .REL, 2),
+            Instruction("LDA", .LDA, .IZY, 5),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 5),
+            Instruction("LDY", .LDY, .ZPX, 4),
+            Instruction("LDA", .LDA, .ZPX, 4),
+            Instruction("LDX", .LDX, .ZPY, 4),
+            Instruction("???", .XXX, .IMP, 4),
+            Instruction("CLV", .CLV, .IMP, 2),
+            Instruction("LDA", .LDA, .ABY, 4),
+            Instruction("TSX", .TSX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 4),
+            Instruction("LDY", .LDY, .ABX, 4),
+            Instruction("LDA", .LDA, .ABX, 4),
+            Instruction("LDX", .LDX, .ABY, 4),
+            Instruction("???", .XXX, .IMP, 4),
+        
+            Instruction("CPY", .CPY, .IMM, 2),
+            Instruction("CMP", .CMP, .IZX, 6),
+            Instruction("???", .NOP, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("CPY", .LDY, .ZP0, 3),
+            Instruction("CMP", .CMP, .ZP0, 3),
+            Instruction("DEC", .DEC, .ZP0, 5),
+            Instruction("???", .XXX, .IMP, 5),
+            Instruction("INY", .INY, .IMP, 2),
+            Instruction("CMP", .CMP, .IMM, 2),
+            Instruction("DEX", .DEX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("CPY", .CPY, .ABS, 4),
+            Instruction("CMP", .CMP, .ABS, 4),
+            Instruction("DEC", .DEC, .ABS, 6),
+            Instruction("???", .XXX, .IMP, 6),
+        
+            Instruction("BNE", .BNE, .REL, 2),
+            Instruction("CMP", .CMP, .IZY, 5),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("CMP", .CMP, .ZPX, 4),
+            Instruction("DEC", .DEC, .ZPX, 6),
+            Instruction("???", .XXX, .IMP, 6),
+            Instruction("CLD", .CLD, .IMP, 2),
+            Instruction("CMP", .CMP, .ABY, 4),
+            Instruction("NOP", .NOP, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 7),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("CMP", .CMP, .ABX, 4),
+            Instruction("DEC", .DEC, .ABX, 7),
+            Instruction("???", .XXX, .IMP, 7),
+        
+            Instruction("CPX", .CPX, .IMM, 2),
+            Instruction("SBC", .SBC, .IZX, 6),
+            Instruction("???", .NOP, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("CPX", .CPX, .ZP0, 3),
+            Instruction("SBC", .SBC, .ZP0, 3),
+            Instruction("INC", .INC, .ZP0, 5),
+            Instruction("???", .XXX, .IMP, 5),
+            Instruction("INX", .INX, .IMP, 2),
+            Instruction("SBC", .SBC, .IMM, 2),
+            Instruction("NOP", .NOP, .IMP, 2),
+            Instruction("???", .SBC, .IMP, 2),
+            Instruction("CPX", .CPX, .ABS, 4),
+            Instruction("SBC", .SBC, .ABS, 4),
+            Instruction("INC", .INC, .ABS, 6),
+            Instruction("???", .XXX, .IMP, 6),
+        
+            Instruction("BEQ", .BEQ, .REL, 2),
+            Instruction("SBC", .SBC, .IZY, 5),
+            Instruction("???", .XXX, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 8),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("SBC", .SBC, .ZPX, 4),
+            Instruction("INC", .INC, .ZPX, 6),
+            Instruction("???", .XXX, .IMP, 6),
+            Instruction("SED", .SED, .IMP, 2),
+            Instruction("SBC", .SBC, .ABY, 4),
+            Instruction("NOP", .NOP, .IMP, 2),
+            Instruction("???", .XXX, .IMP, 7),
+            Instruction("???", .NOP, .IMP, 4),
+            Instruction("SBC", .SBC, .ABX, 4),
+            Instruction("INC", .INC, .ABX, 7),
+            Instruction("???", .XXX, .IMP, 7),
+        ]
+    }()
+    
+
 }
 
 
 // MARK: - Operations
 
 extension MOS6502 {
-    
-    private func ADC(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, crossedPageBoundary) = readAddress(using: addressMode)
+    private enum Operation {
+        case ADC, SBC, AND, ASL, BCS, BCC, BEQ, BNE, BMI, BPL, BVS, BVC, BIT, BRK
+        case CLC, CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY, EOR, INC, INX, INY
+        case JMP, JSR, LDA, LDX, LDY, LSR, NOP, ORA, PHA, PHP, PLA, PLP, ROL, ROR
+        case RTI, RTS, SEC, SED, SEI, STA, STX, STY, TAX, TAY, TSX, TXA, TYA, TXS
+        
+        case XXX
+    }
 
-        pc += bytesRead
-
+    private func ADC(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         let temp = UInt16(a) + UInt16(fetchedValue) + UInt16(status.contains(.carry) ? 1 : 0)
         status.setOptions(.carry, enabled: temp > 255)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0)
-        status.setOptions(.resultIsOverflowed, enabled: ((~(UInt16(a) ^ UInt16(fetchedValue) & (UInt16(a) ^ UInt16(temp)))) & 0x0080) > 0)
+        status.setOptions(.resultIsOverflowed, enabled: ((~(UInt16(a) ^ UInt16(fetchedValue)) & (UInt16(a) ^ temp)) & 0x0080) > 0)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x80) > 0)
         a = UInt8(temp & 0x00ff)
         
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func SBC(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, crossedPageBoundary) = readAddress(using: addressMode)
-
-        pc += bytesRead
-
+    private func SBC(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = UInt16(bus.read(from: address))
         let temp = UInt16(a) + fetchedValue + UInt16(status.contains(.carry) ? 1 : 0)
         status.setOptions(.carry, enabled: (temp & 0xff00) > 0)
@@ -767,11 +702,7 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func AND(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, crossedPageBoundary) = readAddress(using: addressMode)
-
-        pc += bytesRead
-
+    private func AND(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         a = a & fetchedValue
         status.setOptions(.resultIsZero, enabled: a == 0x00)
@@ -780,11 +711,7 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func ASL(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-        
-        pc += bytesRead
-
+    private func ASL(_ address: UInt16, _ addressMode: AddressMode) {
         let fetchedValue = UInt16(bus.read(from: address))
         let temp = fetchedValue << 1
         status.setOptions(.carry, enabled: (temp & 0xff00) > 0)
@@ -796,55 +723,50 @@ extension MOS6502 {
         } else {
             bus.write(UInt8(fetchedValue & 0x00ff), to: address)
         }
-        
-        return 0
     }
     
     
-    private func BCS(_ addressMode: AddressMode) -> UInt8 {
+    private func BCS(_ relativeAddress: UInt16) -> UInt8 {
         guard status.contains(.carry) else { return 0 }
-        return BXX(addressMode)
+        return BXX(relativeAddress)
     }
     
-    private func BCC(_ addressMode: AddressMode) -> UInt8 {
+    private func BCC(_ relativeAddress: UInt16) -> UInt8 {
         guard !status.contains(.carry) else { return 0 }
-        return BXX(addressMode)
+        return BXX(relativeAddress)
     }
     
-    private func BEQ(_ addressMode: AddressMode) -> UInt8 {
+    private func BEQ(_ relativeAddress: UInt16) -> UInt8 {
         guard status.contains(.resultIsZero) else { return 0 }
-        return BXX(addressMode)
+        return BXX(relativeAddress)
     }
     
-    private func BNE(_ addressMode: AddressMode) -> UInt8 {
+    private func BNE(_ relativeAddress: UInt16) -> UInt8 {
         guard !status.contains(.resultIsZero) else { return 0 }
-        return BXX(addressMode)
+        return BXX(relativeAddress)
     }
     
-    private func BMI(_ addressMode: AddressMode) -> UInt8 {
+    private func BMI(_ relativeAddress: UInt16) -> UInt8 {
         guard status.contains(.resultIsNegative) else { return 0 }
-        return BXX(addressMode)
+        return BXX(relativeAddress)
     }
     
-    private func BPL(_ addressMode: AddressMode) -> UInt8 {
+    private func BPL(_ relativeAddress: UInt16) -> UInt8 {
         guard !status.contains(.resultIsNegative) else { return 0 }
-        return BXX(addressMode)
+        return BXX(relativeAddress)
     }
     
-    private func BVS(_ addressMode: AddressMode) -> UInt8 {
+    private func BVS(_ relativeAddress: UInt16) -> UInt8 {
         guard status.contains(.resultIsOverflowed) else { return 0 }
-        return BXX(addressMode)
+        return BXX(relativeAddress)
     }
     
-    private func BVC(_ addressMode: AddressMode) -> UInt8 {
+    private func BVC(_ relativeAddress: UInt16) -> UInt8 {
         guard !status.contains(.resultIsOverflowed) else { return 0 }
-        return BXX(addressMode)
+        return BXX(relativeAddress)
     }
     
-    private func BXX(_ addressMode: AddressMode) -> UInt8 {
-        let (relativeAddress, bytesRead, _) = readAddress(using: addressMode)
-        pc += bytesRead
-        
+    private func BXX(_ relativeAddress: UInt16) -> UInt8 {
         let address = pc &+ relativeAddress
         
         defer {
@@ -859,72 +781,50 @@ extension MOS6502 {
     }
     
     
-    private func BIT(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-        
-        pc += bytesRead
-        
+    private func BIT(_ address: UInt16) {
         let fetchedValue = bus.read(from: address)
         let temp = a & fetchedValue
         status.setOptions(.resultIsZero, enabled: (temp & 0x00FF) == 0x00)
         status.setOptions(.resultIsNegative, enabled: (temp & (1 << 7)) > 0)
         status.setOptions(.resultIsOverflowed, enabled: (temp & (1 << 6)) > 0)
-        
-        return 0
     }
     
-    private func BRK(_ addressMode: AddressMode) -> UInt8 {
-        let (_, bytesRead, _) = readAddress(using: addressMode)
-
-        pc += 1 + bytesRead
+    private func BRK() {
+        pc += 1
         
-        status.setOptions(.disableInterrupts, enabled: true)
+        status.insert(.disableInterrupts)
         bus.write(UInt8((pc >> 8) & 0x00FF), to: 0x0100 + UInt16(stkp))
         stkp -= 1
         bus.write(UInt8(pc & 0x00FF), to: 0x0100 + UInt16(stkp));
         stkp -= 1
 
-        status.setOptions(.break, enabled: true)
+        status.insert(.break)
         bus.write(status.rawValue, to: 0x0100 + UInt16(stkp))
         stkp -= 1
-        status.setOptions(.break, enabled: false)
+        status.remove(.break)
 
         pc = UInt16(bus.read(from: 0xfffe)) | (UInt16(bus.read(from: 0xffff)) << 8)
-        
-        return 0
     }
     
     
-    private func CLC(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
-        status.setOptions(.carry, enabled: false)
-        return 0
+    private func CLC() {
+        status.remove(.carry)
     }
     
-    private func CLD(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
-        status.setOptions(.decimalMode, enabled: false)
-        return 0
+    private func CLD() {
+        status.remove(.decimalMode)
     }
     
-    private func CLI(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
-        status.setOptions(.disableInterrupts, enabled: false)
-        return 0
+    private func CLI() {
+        status.remove(.disableInterrupts)
     }
     
-    private func CLV(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
-        status.setOptions(.resultIsOverflowed, enabled: false)
-        return 0
+    private func CLV() {
+        status.remove(.resultIsOverflowed)
     }
     
     
-    private func CMP(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, crossedPageBoundary) = readAddress(using: addressMode)
-
-        pc += bytesRead
-
+    private func CMP(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         let temp = UInt16(a) - UInt16(fetchedValue)
         status.setOptions(.carry, enabled: a >= fetchedValue)
@@ -934,11 +834,7 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func CPX(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, crossedPageBoundary) = readAddress(using: addressMode)
-
-        pc += bytesRead
-
+    private func CPX(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         let temp = UInt16(x) - UInt16(fetchedValue)
         status.setOptions(.carry, enabled: x >= fetchedValue)
@@ -948,11 +844,7 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
 
-    private func CPY(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, crossedPageBoundary) = readAddress(using: addressMode)
-
-        pc += bytesRead
-
+    private func CPY(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         let temp = UInt16(y) - UInt16(fetchedValue)
         status.setOptions(.carry, enabled: y >= fetchedValue)
@@ -963,91 +855,60 @@ extension MOS6502 {
     }
     
     
-    private func DEC(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-
-        pc += bytesRead
-
+    private func DEC(_ address: UInt16) {
         let fetchedValue = bus.read(from: address)
         let temp = fetchedValue - 1
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x0000)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
-        
-        return 0
     }
     
-    private func DEX(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func DEX() {
         x -= 1
         status.setOptions(.resultIsZero, enabled: x == 0x00)
         status.setOptions(.resultIsNegative, enabled: (x & 0x80) > 0)
-        return 0
     }
 
-    private func DEY(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func DEY() {
         y -= 1
         status.setOptions(.resultIsZero, enabled: y == 0x00)
         status.setOptions(.resultIsNegative, enabled: (y & 0x80) > 0)
-        return 0
     }
     
     
-    private func EOR(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-
-        pc += bytesRead
-
+    private func EOR(_ address: UInt16) {
         let fetchedValue = bus.read(from: address)
         a = a ^ fetchedValue
         status.setOptions(.resultIsZero, enabled: a == 0x00)
         status.setOptions(.resultIsNegative, enabled: (a & 0x80) > 0)
-        
-        return 0
     }
     
     
-    private func INC(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-
-        pc += bytesRead
-
+    private func INC(_ address: UInt16) {
         let fetchedValue = bus.read(from: address)
         let temp = fetchedValue + 1
         bus.write(temp, to: address)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x0000)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
-
-        return 0
     }
     
-    private func INX(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func INX() {
         x += 1
         status.setOptions(.resultIsZero, enabled: x == 0x00)
         status.setOptions(.resultIsNegative, enabled: (x & 0x80) > 0)
-        return 0
     }
 
-    private func INY(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func INY() {
         y += 1
         status.setOptions(.resultIsZero, enabled: y == 0x00)
         status.setOptions(.resultIsNegative, enabled: (y & 0x80) > 0)
-        return 0
     }
 
     
-    private func JMP(_ addressMode: AddressMode) -> UInt8 {
-        let (address, _, _) = readAddress(using: addressMode)
+    private func JMP(_ address: UInt16) {
         pc = address
-        return 0
     }
     
-    private func JSR(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-        
-        pc += bytesRead
+    private func JSR(_ address: UInt16) {
         pc -= 1
         
         bus.write(UInt8((pc >> 8) & 0x00ff), to: 0x0100 + UInt16(stkp))
@@ -1056,16 +917,10 @@ extension MOS6502 {
         stkp -= 1
         
         pc = address
-        
-        return 0
     }
     
     
-    private func LDA(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, crossedPageBoundary) = readAddress(using: addressMode)
-        
-        pc += bytesRead
-        
+    private func LDA(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         a = fetchedValue
         status.setOptions(.resultIsZero, enabled: a == 0x00)
@@ -1074,11 +929,7 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func LDX(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, crossedPageBoundary) = readAddress(using: addressMode)
-        
-        pc += bytesRead
-        
+    private func LDX(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         x = fetchedValue
         status.setOptions(.resultIsZero, enabled: x == 0x00)
@@ -1087,11 +938,7 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
 
-    private func LDY(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, crossedPageBoundary) = readAddress(using: addressMode)
-        
-        pc += bytesRead
-        
+    private func LDY(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         y = fetchedValue
         status.setOptions(.resultIsZero, enabled: y == 0x00)
@@ -1101,11 +948,7 @@ extension MOS6502 {
     }
     
     
-    private func LSR(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-        
-        pc += bytesRead
-
+    private func LSR(_ address: UInt16, _ addressMode: AddressMode) {
         let fetchedValue = bus.read(from: address)
         status.setOptions(.carry, enabled: (fetchedValue & 0x0001) > 0)
         let temp = fetchedValue >> 1
@@ -1117,15 +960,9 @@ extension MOS6502 {
         } else {
             bus.write(UInt8(temp & 0x00ff), to: address)
         }
-        
-        return 0
     }
     
-    private func NOP(_ addressMode: AddressMode) -> UInt8 {
-        let (_, bytesRead, crossedPageBoundary) = readAddress(using: addressMode)
-
-        pc += bytesRead
-        
+    private func NOP(_ crossedPageBoundary: Bool) -> UInt8 {
         switch opcode {
         case 0x1c, 0x3c, 0x5c, 0x7c, 0xdc, 0xfc:
             return crossedPageBoundary ? 1 : 0
@@ -1134,11 +971,7 @@ extension MOS6502 {
         }
     }
     
-    private func ORA(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, crossedPageBoundary) = readAddress(using: addressMode)
-        
-        pc += bytesRead
-
+    private func ORA(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         a = a | fetchedValue
         status.setOptions(.resultIsZero, enabled: a == 0x00)
@@ -1147,45 +980,34 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func PHA(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func PHA() {
         bus.write(a, to: 0x0100 + UInt16(stkp))
         stkp -= 1
-        return 0
     }
     
-    private func PHP(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
-        status.setOptions([.break, .unused], enabled: true)
+    private func PHP() {
+        status.insert(.break)
+        status.insert(.unused)
         bus.write(status.rawValue, to: 0x0100 + UInt16(stkp))
-        status.setOptions([.break, .unused], enabled: false)
+        status.remove(.break)
+        status.remove(.unused)
         stkp -= 1
-        return 0
     }
     
-    private func PLA(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func PLA() {
         stkp += 1
         a = bus.read(from: 0x0100 + UInt16(stkp))
         status.setOptions(.resultIsZero, enabled: a == 0x00)
         status.setOptions(.resultIsNegative, enabled: (a & 0x80) > 0)
-        
-        return 0
     }
     
-    private func PLP(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func PLP() {
         stkp += 1
         status = Status(rawValue: bus.read(from: 0x0100 + UInt16(stkp)))
-        status.setOptions(.unused, enabled: true)
-        return 0
+        status.insert(.unused)
     }
     
-    private func ROL(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-        
-        pc += bytesRead
-
+    private func ROL(_ address: UInt16, _ addressMode: AddressMode) {
         let fetchedValue = bus.read(from: address)
         let temp = UInt16(fetchedValue << 1) | (status.contains(.carry) ? 1 : 0)
         status.setOptions(.carry, enabled: (temp & 0xff00) > 0)
@@ -1197,15 +1019,9 @@ extension MOS6502 {
         } else {
             bus.write(UInt8(temp & 0x00ff), to: address)
         }
-
-        return 0
     }
     
-    private func ROR(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-        
-        pc += bytesRead
-
+    private func ROR(_ address: UInt16, _ addressMode: AddressMode) {
         let fetchedValue = bus.read(from: address)
         let temp = (UInt16(status.contains(.carry) ? 1 : 0) << 7) | (UInt16(fetchedValue) >> 1)
         status.setOptions(.carry, enabled: (fetchedValue & 0x01) > 0)
@@ -1217,25 +1033,22 @@ extension MOS6502 {
         } else {
             bus.write(UInt8(temp * 0x00ff), to: address)
         }
-
-        return 0
     }
     
-    private func RTI(_ addressMode: AddressMode) -> UInt8 {
+    private func RTI() {
         // We assume IMP address mode.
         stkp += 1
         status = Status(rawValue: bus.read(from: 0x0100 + UInt16(stkp)))
-        status.setOptions([.break, .unused], enabled: false)
+        status.remove(.break)
+        status.remove(.unused)
 
         stkp += 1
         pc = UInt16(bus.read(from: 0x0100 + UInt16(stkp)))
         stkp += 1
         pc |= UInt16(bus.read(from: 0x0100 + UInt16(stkp))) << 8
-        
-        return 0
     }
     
-    private func RTS(_ addressMode: AddressMode) -> UInt8 {
+    private func RTS() {
         // We assume IMP address mode.
         stkp += 1
         pc = UInt16(bus.read(from: 0x0100 + UInt16(stkp)))
@@ -1243,99 +1056,268 @@ extension MOS6502 {
         pc |= UInt16(bus.read(from: 0x0100 + UInt16(stkp))) << 8
 
         pc += 1
-        
-        return 0
     }
     
-    private func SEC(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
-        status.setOptions(.carry, enabled: true)
-        return 0
+    private func SEC() {
+        status.insert(.carry)
     }
     
-    private func SED(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
-        status.setOptions(.decimalMode, enabled: true)
-        return 0
+    private func SED() {
+        status.insert(.decimalMode)
     }
     
-    private func SEI(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
-        status.setOptions(.disableInterrupts, enabled: true)
-        return 0
+    private func SEI() {
+        status.insert(.disableInterrupts)
     }
     
-    private func STA(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-        pc += bytesRead
+    private func STA(_ address: UInt16) {
         bus.write(a, to: address)
-        return 0
     }
     
-    private func STX(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-        pc += bytesRead
+    private func STX(_ address: UInt16) {
         bus.write(x, to: address)
-        return 0
     }
     
-    private func STY(_ addressMode: AddressMode) -> UInt8 {
-        let (address, bytesRead, _) = readAddress(using: addressMode)
-        pc += bytesRead
+    private func STY(_ address: UInt16) {
         bus.write(y, to: address)
-        return 0
     }
     
-    private func TAX(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func TAX() {
         x = a
         status.setOptions(.resultIsZero, enabled: x == 0x00)
         status.setOptions(.resultIsNegative, enabled: (x & 0x80) > 0)
-        return 0
     }
     
-    private func TAY(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func TAY() {
         y = a
         status.setOptions(.resultIsZero, enabled: y == 0x00)
         status.setOptions(.resultIsNegative, enabled: (y & 0x80) > 0)
-        return 0
     }
     
-    private func TSX(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func TSX() {
         x = stkp
         status.setOptions(.resultIsZero, enabled: y == 0x00)
         status.setOptions(.resultIsNegative, enabled: (y & 0x80) > 0)
-        return 0
     }
     
-    private func TXA(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func TXA() {
         a = x
         status.setOptions(.resultIsZero, enabled: y == 0x00)
         status.setOptions(.resultIsNegative, enabled: (y & 0x80) > 0)
-        return 0
     }
     
-    private func TYA(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func TYA() {
         a = y
         status.setOptions(.resultIsZero, enabled: a == 0x00)
         status.setOptions(.resultIsNegative, enabled: (a & 0x80) > 0)
-        return 0
     }
     
-    private func TXS(_ addressMode: AddressMode) -> UInt8 {
-        // We assume IMP address mode.
+    private func TXS() {
         stkp = x
-        return 0
-    }
-    
-    private func XXX(_ addressMode: AddressMode) -> UInt8 {
-        return 0
     }
 }
+
+// MARK: - Address Modes
+
+extension MOS6502 {
+    private enum AddressMode {
+        case IMP, IMM, ABS, ABX, ABY, REL, ZP0, ZPX, ZPY, IND, IZX, IZY
+    }
+    
+    private typealias ReadAddressResult = (address: UInt16, crossedPageBoundary: Bool)
+
+    /// Implied
+    ///
+    /// There is no additional data required for this instruction. The instruction
+    /// does something very simple like like sets a status bit. However, we will
+    /// target the accumulator, for instructions like PHA
+    private func IMP() -> ReadAddressResult {
+        return (pc, false)
+    }
+    
+    /// Immediate
+    ///
+    /// The instruction expects the next byte to be used as a value, so we'll prep
+    /// the read address to point to the next byte
+    private func IMM() -> ReadAddressResult {
+        let address = pc
+        pc += 1
+        
+        return (address, false)
+    }
+    
+    /// Absolute
+    ///
+    /// A full 16-bit address is loaded and used.
+    private func ABS() -> ReadAddressResult {
+        let lo = UInt16(bus.read(from: pc))
+        pc += 1
+        let hi = UInt16(bus.read(from: pc))
+        pc += 1
+        
+        let address = (hi << 8) | lo
+
+        return (address, false)
+    }
+    
+    /// Absolute with X Offset
+    ///
+    /// Fundamentally the same as absolute addressing, but the contents of the X Register
+    /// is added to the supplied two byte address. If the resulting address changes
+    /// the page, an additional clock cycle is required
+    private func ABX() -> ReadAddressResult {
+        let lo = UInt16(bus.read(from: pc))
+        pc += 1
+        let hi = UInt16(bus.read(from: pc))
+        pc += 1
+        
+        var address = (hi << 8) | lo
+        address += UInt16(x)
+        
+        let crossedPageBoundary = (address & 0xff00) != (hi << 8)
+        
+        return (address, crossedPageBoundary)
+    }
+    
+    /// Absolute with Y Offset
+    ///
+    /// Fundamentally the same as absolute addressing, but the contents of the Y Register
+    /// is added to the supplied two byte address. If the resulting address changes
+    /// the page, an additional clock cycle is required
+    private func ABY() -> ReadAddressResult {
+        let lo = UInt16(bus.read(from: pc))
+        pc += 1
+        let hi = UInt16(bus.read(from: pc))
+        pc += 1
+        
+        var address = (hi << 8) | lo
+        address += UInt16(y)
+        
+        let crossedPageBoundary = (address & 0xff00) != (hi << 8)
+        
+        return (address, crossedPageBoundary)
+    }
+    
+    /// Relative
+    ///
+    /// This address mode is exclusive to branch instructions. The address
+    /// must reside within -128 to +127 of the branch instruction, i.e.
+    /// you cant directly branch to any address in the addressable range.
+    private func REL() -> ReadAddressResult {
+        var relativeAddress = UInt16(bus.read(from: pc))
+        pc += 1
+        
+        if (relativeAddress & 0x80) > 0 {
+            relativeAddress |= 0xFF00;
+        }
+        
+        return (relativeAddress, false)
+    }
+    
+    /// Zero Page
+    ///
+    /// To save program bytes, zero page addressing allows you to absolutely address
+    /// a location in first 0xFF bytes of address range. Clearly this only requires
+    /// one byte instead of the usual two.
+    private func ZP0() -> ReadAddressResult {
+        var address = UInt16(bus.read(from: pc))
+        address &= 0x00ff
+        pc += 1
+        
+        return (address, false)
+    }
+    
+    /// Zero Page with X Offset
+    ///
+    /// Fundamentally the same as Zero Page addressing, but the contents of the X Register
+    /// is added to the supplied single byte address. This is useful for iterating through
+    /// ranges within the first page.
+    private func ZPX() -> ReadAddressResult {
+        var address = UInt16(bus.read(from: pc + UInt16(x)))
+        address &= 0x00ff
+        pc += 1
+        
+        return (address, false)
+    }
+    
+    /// Zero Page with Y Offset
+    ///
+    /// Fundamentally the same as Zero Page addressing, but the contents of the Y Register
+    /// is added to the supplied single byte address. This is useful for iterating through
+    /// ranges within the first page.
+    private func ZPY() -> ReadAddressResult {
+        var address = UInt16(bus.read(from: pc + UInt16(y)))
+        address &= 0x00ff
+        pc += 1
+        
+        return (address, false)
+    }
+    
+    /// Indirect
+    ///
+    /// The supplied 16-bit address is read to get the actual 16-bit address. This is
+    /// instruction is unusual in that it has a bug in the hardware! To emulate its
+    /// function accurately, we also need to emulate this bug. If the low byte of the
+    /// supplied address is 0xFF, then to read the high byte of the actual address
+    /// we need to cross a page boundary. This doesnt actually work on the chip as
+    /// designed, instead it wraps back around in the same page, yielding an
+    /// invalid actual address
+    private func IND() -> ReadAddressResult {
+        let ptrLo = UInt16(bus.read(from: pc))
+        pc += 1
+        let ptrHi = UInt16(bus.read(from: pc))
+        pc += 1
+        
+        let ptr = (ptrHi << 8) | ptrLo
+
+        let address: UInt16
+        if (ptrLo == 0x00ff) { // Simulate page boundary hardware bug.
+            address = (UInt16(bus.read(from: ptr & 0xff00)) << 8) | UInt16(bus.read(from: ptr + 0))
+        } else {
+            address = (UInt16(bus.read(from: ptr + 1)) << 8) | UInt16(bus.read(from: ptr + 0))
+        }
+        
+        return (address, false)
+    }
+    
+    /// Indirect X
+    ///
+    /// The supplied 8-bit address is offset by X Register to index
+    /// a location in page 0x00. The actual 16-bit address is read
+    /// from this location
+    private func IZX() -> ReadAddressResult {
+        let ptr = UInt16(bus.read(from: pc))
+        pc += 1
+        
+        let lo = UInt16(bus.read(from: (ptr + UInt16(x)) & 0x00ff))
+        let hi = UInt16(bus.read(from: (ptr + UInt16(x) + 1) & 0xff00))
+        let address = (hi << 8) | lo
+        
+        return (address, false)
+    }
+    
+    /// Indirect Y
+    ///
+    /// The supplied 8-bit address indexes a location in page 0x00. From
+    /// here the actual 16-bit address is read, and the contents of
+    /// Y Register is added to it to offset it. If the offset causes a
+    /// change in page then an additional clock cycle is required.
+    private func IZY() -> ReadAddressResult {
+        let ptr = UInt16(bus.read(from: pc))
+        pc += 1
+        
+        let lo = UInt16(bus.read(from: ptr & 0x00ff))
+        let hi = UInt16(bus.read(from: (ptr + 1) & 0xff00))
+        
+        var address = (hi << 8) | lo
+        address += UInt16(y)
+        
+        let crossedPageBoundary = (address & 0xff00) != (hi << 8)
+        
+        return (address, crossedPageBoundary)
+    }
+}
+
 
 extension OptionSet {
     mutating func setOptions(_ options: Self, enabled: Bool) {
