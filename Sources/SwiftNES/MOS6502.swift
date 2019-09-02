@@ -683,7 +683,7 @@ extension MOS6502 {
         let temp = UInt16(a) + UInt16(fetchedValue) + UInt16(status.contains(.carry) ? 1 : 0)
         status.setOptions(.carry, enabled: temp > 255)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0)
-        status.setOptions(.resultIsOverflowed, enabled: ((~(UInt16(a) ^ UInt16(fetchedValue) & (UInt16(a) ^ UInt16(temp)))) & 0x0080) > 0)
+        status.setOptions(.resultIsOverflowed, enabled: ((~(UInt16(a) ^ UInt16(fetchedValue)) & (UInt16(a) ^ temp)) & 0x0080) > 0)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x80) > 0)
         a = UInt8(temp & 0x00ff)
         
