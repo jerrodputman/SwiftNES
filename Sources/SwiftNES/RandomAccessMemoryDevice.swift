@@ -33,7 +33,7 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
     /// Creates a new random access memory device with the specified address range.
     ///
     /// - parameter addressRange: The range of addresses that this device responds to.
-    init(addressRange: ClosedRange<UInt16>) {
+    init(addressRange: CountableClosedRange<UInt16>) {
         self.addressRange = addressRange
         self.memory = Array<UInt8>(repeating: UInt8.zero, count: addressRange.count)
     }
@@ -62,7 +62,7 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
     
     // MARK: - Private
     
-    private let addressRange: ClosedRange<UInt16>
+    private let addressRange: CountableClosedRange<UInt16>
     
     fileprivate var memory: MemoryType
 }
