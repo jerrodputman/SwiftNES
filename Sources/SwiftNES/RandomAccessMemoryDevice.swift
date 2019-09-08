@@ -22,20 +22,40 @@
 
 import Foundation
 
+/// Represents errors thrown by the device.
+enum RandomAccessMemoryDeviceError: Error {
+    /// The address range specified is not a multiple of the specified memory size.
+    case addressRangeNotMultipleOfMemorySize(memorySize: UInt32, addressRange: CountableClosedRange<UInt16>)
+}
+
 /// Represents a device that provides random access memory to a bus.
 final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
     
-    typealias MemoryType = [UInt8]
-
-    
     // MARK: - Initializers
+    
+    /// Creates a new random access memory device with the specified memory size and address range.
+    ///
+    /// - note: If `addressRange` is larger than `memorySize`, the memory will be mirrored across the
+    /// available range. For example, if the memory size is `0x7f` but the address range is from `0x00...0xff`,
+    /// then the memory accessed starting at `0x80` will be the start of the memory.
+    ///
+    /// - parameter memorySize: The size of the memory of the device.
+    /// - parameter addressRange: The range of addresses that this device responds to. The size must be
+    /// a multiple of `memorySize`.
+    init(memorySize: UInt32, addressRange: CountableClosedRange<UInt16>) throws {
+        guard UInt32(addressRange.count) % memorySize == 0 else {
+            throw RandomAccessMemoryDeviceError.addressRangeNotMultipleOfMemorySize(memorySize: memorySize, addressRange: addressRange)
+        }
+        
+        self.memory = Array<UInt8>(repeating: UInt8.zero, count: Int(memorySize))
+        self.addressRange = addressRange
+    }
     
     /// Creates a new random access memory device with the specified address range.
     ///
     /// - parameter addressRange: The range of addresses that this device responds to.
-    init(addressRange: CountableClosedRange<UInt16>) {
-        self.addressRange = addressRange
-        self.memory = Array<UInt8>(repeating: UInt8.zero, count: addressRange.count)
+    convenience init(addressRange: CountableClosedRange<UInt16>) {
+        try! self.init(memorySize: UInt32(addressRange.count), addressRange: addressRange)
     }
     
     
@@ -49,6 +69,7 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
         guard let addressIndex = addressRange.firstIndex(of: address) else { return 0 }
         
         let distance = addressRange.distance(from: addressRange.startIndex, to: addressIndex)
+        // TODO: Handle mirroring.
         return memory[distance]
     }
     
@@ -56,38 +77,40 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
         guard let addressIndex = addressRange.firstIndex(of: address) else { return }
         
         let distance = addressRange.distance(from: addressRange.startIndex, to: addressIndex)
-        memory[distance] = data
+        // TODO: Handle mirroring.
+        memory[distance & (memory.count - 1)] = data
     }
     
     
     // MARK: - Private
     
-    private let addressRange: CountableClosedRange<UInt16>
+    /// The range of addresses that the device responds to.
+    fileprivate let addressRange: CountableClosedRange<UInt16>
     
-    fileprivate var memory: MemoryType
+    /// The memory of the device.
+    fileprivate var memory: [UInt8]
 }
 
 extension RandomAccessMemoryDevice: Collection {
-    typealias Index = MemoryType.Index
-    typealias Element = MemoryType.Element
+    typealias Index = UInt16
+    typealias Element = UInt8
     
-    var startIndex: Index { return memory.startIndex }
-    var endIndex: Index { return memory.endIndex }
+    var startIndex: Index { return addressRange.lowerBound }
+    var endIndex: Index { return addressRange.upperBound }
     
-    // TODO: Use the read and write methods instead.
     subscript(index: Index) -> Iterator.Element {
-        get { return memory[index] }
-        set { memory[index] = newValue }
+        get { return read(from: index) }
+        set { write(newValue, to: index) }
     }
     
     func index(after i: Index) -> Index {
-        return memory.index(after: i)
+        return i + 1
     }
 }
 
 extension RandomAccessMemoryDevice: BidirectionalCollection {
     func index(before i: Index) -> Index {
-        return memory.index(before: i)
+        return i - 1
     }
 }
 
@@ -98,7 +121,10 @@ extension RandomAccessMemoryDevice: RangeReplaceableCollection {
         fatalError()
     }
     
-    func replaceSubrange<C: Collection>(_ subrange: Range<Index>, with newElements: C) where Element == C.Element {
-        memory.replaceSubrange(subrange, with: newElements)
+    func replaceSubrange<C: Collection>(_ subrange: Range<UInt16>, with newElements: C) where Element == C.Element {
+        let lowerBound = Int(subrange.lowerBound)
+        let upperBound = Int(subrange.upperBound)
+        
+        memory.replaceSubrange(lowerBound..<upperBound, with: newElements)
     }
 }
