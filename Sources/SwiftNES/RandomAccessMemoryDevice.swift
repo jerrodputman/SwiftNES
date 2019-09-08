@@ -120,8 +120,8 @@ extension RandomAccessMemoryDevice: RangeReplaceableCollection {
     }
     
     func replaceSubrange<C: Collection>(_ subrange: Range<UInt16>, with newElements: C) where Element == C.Element {
-        let lowerBound = Int(subrange.lowerBound)
-        let upperBound = Int(subrange.upperBound)
+        let lowerBound = Int(subrange.lowerBound) & (memory.count - 1)
+        let upperBound = Int(subrange.upperBound) & (memory.count - 1)
         
         memory.replaceSubrange(lowerBound..<upperBound, with: newElements)
     }
