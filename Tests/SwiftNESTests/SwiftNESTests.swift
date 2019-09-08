@@ -30,7 +30,9 @@ final class SwiftNESTests: XCTestCase {
         */
         let program = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA"
             .hexToUInt8
-        nes.ram.replaceSubrange(0x8000..<(0x8000+program.count), with: program)
+        nes.ram.replaceSubrange(0x8000..<(0x8000 + UInt16(program.count)), with: program)
+        
+        XCTAssert(nes.ram[0x8000] == 0xa2, "Program not loaded in RAM")
 
         nes.ram[0xfffc] = 0x00
         nes.ram[0xfffd] = 0x80
