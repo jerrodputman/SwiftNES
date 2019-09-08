@@ -22,8 +22,10 @@
 
 import Foundation
 
+/// Represents errors thrown by the device.
 enum RandomAccessMemoryDeviceError: Error {
-    case addressRangeNotMultipleOfMemorySize
+    /// The address range specified is not a multiple of the specified memory size.
+    case addressRangeNotMultipleOfMemorySize(memorySize: UInt32, addressRange: CountableClosedRange<UInt16>)
 }
 
 /// Represents a device that provides random access memory to a bus.
@@ -42,7 +44,7 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
     /// a multiple of `memorySize`.
     init(memorySize: UInt32, addressRange: CountableClosedRange<UInt16>) throws {
         guard UInt32(addressRange.count) % memorySize == 0 else {
-            throw RandomAccessMemoryDeviceError.addressRangeNotMultipleOfMemorySize
+            throw RandomAccessMemoryDeviceError.addressRangeNotMultipleOfMemorySize(memorySize: memorySize, addressRange: addressRange)
         }
         
         self.memory = Array<UInt8>(repeating: UInt8.zero, count: Int(memorySize))
