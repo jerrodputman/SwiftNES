@@ -29,7 +29,7 @@ final class NES {
 
     /// Creates a virtual NES.
     init() {
-        ram = RandomAccessMemoryDevice(addressRange: 0x0000...0xffff)
+        ram = try! RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x0000...0xffff)
         let bus = Bus(addressableDevices: [ram])
         cpu = MOS6502(bus: bus)
     }
