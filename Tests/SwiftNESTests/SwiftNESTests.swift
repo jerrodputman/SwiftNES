@@ -30,17 +30,17 @@ final class SwiftNESTests: XCTestCase {
         */
         let program = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA"
             .hexToUInt8
-        nes.ram.replaceSubrange(0x8000..<(0x8000 + UInt16(program.count)), with: program)
+        nes.ram.replaceSubrange(0x8700..<(0x8700 + UInt16(program.count)), with: program)
         
-        XCTAssert(nes.ram[0x8000] == 0xa2, "Program not loaded in RAM")
+        XCTAssert(nes.ram[0x8700] == 0xa2, "Program not loaded in RAM")
 
         nes.ram[0xfffc] = 0x00
-        nes.ram[0xfffd] = 0x80
+        nes.ram[0xfffd] = 0x87
         
         nes.cpu.reset()
-        XCTAssert(nes.cpu.pc == 0x8000, "Reset did not place program counter to 0x8000")
+        XCTAssert(nes.cpu.pc == 0x8700, "Reset did not place program counter to 0x8700")
         
-        while nes.cpu.pc < 0x8000 + program.count {
+        while nes.cpu.pc < 0x8700 + program.count {
             nes.cpu.clock()
         }
         

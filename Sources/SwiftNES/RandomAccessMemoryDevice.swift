@@ -69,15 +69,13 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
         guard let addressIndex = addressRange.firstIndex(of: address) else { return 0 }
         
         let distance = addressRange.distance(from: addressRange.startIndex, to: addressIndex)
-        // TODO: Handle mirroring.
-        return memory[distance]
+        return memory[distance & (memory.count - 1)]
     }
     
     func write(_ data: UInt8, to address: UInt16) {
         guard let addressIndex = addressRange.firstIndex(of: address) else { return }
         
         let distance = addressRange.distance(from: addressRange.startIndex, to: addressIndex)
-        // TODO: Handle mirroring.
         memory[distance & (memory.count - 1)] = data
     }
     
@@ -122,8 +120,8 @@ extension RandomAccessMemoryDevice: RangeReplaceableCollection {
     }
     
     func replaceSubrange<C: Collection>(_ subrange: Range<UInt16>, with newElements: C) where Element == C.Element {
-        let lowerBound = Int(subrange.lowerBound)
-        let upperBound = Int(subrange.upperBound)
+        let lowerBound = Int(subrange.lowerBound) & (memory.count - 1)
+        let upperBound = Int(subrange.upperBound) & (memory.count - 1)
         
         memory.replaceSubrange(lowerBound..<upperBound, with: newElements)
     }
