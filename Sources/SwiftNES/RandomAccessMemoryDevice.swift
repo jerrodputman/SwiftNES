@@ -42,56 +42,56 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
     /// - parameter memorySize: The size of the memory of the device.
     /// - parameter addressRange: The range of addresses that this device responds to. The size must be
     /// a multiple of `memorySize`.
-    init(memorySize: UInt32, addressRange: CountableClosedRange<UInt16>) throws {
+    init(memorySize: UInt32, addressRange: AddressRange) throws {
         guard UInt32(addressRange.count) % memorySize == 0 else {
             throw RandomAccessMemoryDeviceError.addressRangeNotMultipleOfMemorySize(memorySize: memorySize, addressRange: addressRange)
         }
         
-        self.memory = Array<UInt8>(repeating: UInt8.zero, count: Int(memorySize))
+        self.memory = Array<Value>(repeating: Value.zero, count: Int(memorySize))
         self.addressRange = addressRange
     }
     
     /// Creates a new random access memory device with the specified address range.
     ///
     /// - parameter addressRange: The range of addresses that this device responds to.
-    convenience init(addressRange: CountableClosedRange<UInt16>) {
+    convenience init(addressRange: AddressRange) {
         try! self.init(memorySize: UInt32(addressRange.count), addressRange: addressRange)
     }
     
     
     // MARK: - Accessing the device
     
-    func respondsTo(_ address: UInt16) -> Bool {
+    func respondsTo(_ address: Address) -> Bool {
         addressRange.contains(address)
     }
     
-    func read(from address: UInt16) -> UInt8 {
+    func read(from address: Address) -> Value {
         guard let addressIndex = addressRange.firstIndex(of: address) else { return 0 }
         
         let distance = addressRange.distance(from: addressRange.startIndex, to: addressIndex)
         return memory[distance & (memory.count - 1)]
     }
     
-    func write(_ data: UInt8, to address: UInt16) {
+    func write(_ value: Value, to address: Address) {
         guard let addressIndex = addressRange.firstIndex(of: address) else { return }
         
         let distance = addressRange.distance(from: addressRange.startIndex, to: addressIndex)
-        memory[distance & (memory.count - 1)] = data
+        memory[distance & (memory.count - 1)] = value
     }
     
     
     // MARK: - Private
     
     /// The range of addresses that the device responds to.
-    fileprivate let addressRange: CountableClosedRange<UInt16>
+    fileprivate let addressRange: AddressRange
     
     /// The memory of the device.
-    fileprivate var memory: [UInt8]
+    fileprivate var memory: [Value]
 }
 
 extension RandomAccessMemoryDevice: Collection {
-    typealias Index = UInt16
-    typealias Element = UInt8
+    typealias Index = Address
+    typealias Element = Value
     
     var startIndex: Index { return addressRange.lowerBound }
     var endIndex: Index { return addressRange.upperBound }
@@ -119,7 +119,7 @@ extension RandomAccessMemoryDevice: RangeReplaceableCollection {
         fatalError()
     }
     
-    func replaceSubrange<C: Collection>(_ subrange: Range<UInt16>, with newElements: C) where Element == C.Element {
+    func replaceSubrange<C: Collection>(_ subrange: Range<Address>, with newElements: C) where Element == C.Element {
         let lowerBound = Int(subrange.lowerBound) & (memory.count - 1)
         let upperBound = Int(subrange.upperBound) & (memory.count - 1)
         

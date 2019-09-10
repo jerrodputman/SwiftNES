@@ -38,24 +38,24 @@ final class MOS6502 {
     // MARK: - Registers
     
     /// The accumulator.
-    private(set) var a: UInt8 = 0x00
+    private(set) var a: Value = 0x00
     
     /// The x register.
-    private(set) var x: UInt8 = 0x00
+    private(set) var x: Value = 0x00
     
     /// The y register.
-    private(set) var y: UInt8 = 0x00
+    private(set) var y: Value = 0x00
     
     /// The stack pointer.
-    private(set) var stkp: UInt8 = 0x00
+    private(set) var stkp: Value = 0x00
     
     /// The program counter.
-    private(set) var pc: UInt16 = 0x0000
+    private(set) var pc: Address = 0x0000
     
     
     /// An option set that defines the bits of the Status register.
     struct Status: OptionSet {
-        let rawValue: UInt8
+        let rawValue: Value
         
         /// Carry the 1.
         static let carry = Status(rawValue: (1 << 0))
@@ -136,9 +136,9 @@ final class MOS6502 {
     func reset() {
         // Get the address to set the program counter to.
         // The address is contained at 0xfffc
-        let resetAddress: UInt16 = 0xfffc
-        let lo = UInt16(bus.read(from: resetAddress + 0))
-        let hi = UInt16(bus.read(from: resetAddress + 1))
+        let resetAddress: Address = 0xfffc
+        let lo = Address(bus.read(from: resetAddress + 0))
+        let hi = Address(bus.read(from: resetAddress + 1))
         
         // Set the program counter.
         pc = (hi << 8) | lo
@@ -166,22 +166,22 @@ final class MOS6502 {
         
         // Push the program counter to the stack.
         // The program counter is 16-bits, so we require 2 writes.
-        bus.write(UInt8((pc >> 8) & 0x00ff), to: 0x0100 + UInt16(stkp))
+        bus.write(Value((pc >> 8) & 0x00ff), to: 0x0100 + Address(stkp))
         stkp -= 1
-        bus.write(UInt8(pc & 0x00ff), to: 0x0100 + UInt16(stkp))
+        bus.write(Value(pc & 0x00ff), to: 0x0100 + Address(stkp))
         stkp -= 1
         
         // Push the status register to the stack.
         status.remove(.break)
         status.insert(.unused)
         status.insert(.disableInterrupts)
-        bus.write(status.rawValue, to: 0x0100 + UInt16(stkp))
+        bus.write(status.rawValue, to: 0x0100 + Address(stkp))
         stkp -= 1
         
         // Read the new program counter location from a specific address.
-        let irqAddress: UInt16 = 0xfffe
-        let lo = UInt16(bus.read(from: irqAddress + 0))
-        let hi = UInt16(bus.read(from: irqAddress + 1))
+        let irqAddress: Address = 0xfffe
+        let lo = Address(bus.read(from: irqAddress + 0))
+        let hi = Address(bus.read(from: irqAddress + 1))
         pc = (hi << 8) | lo
         
         // Interrupt requests take time.
@@ -193,22 +193,22 @@ final class MOS6502 {
     func nmi() {
         // Push the program counter to the stack.
         // The program counter is 16-bits, so we require 2 writes.
-        bus.write(UInt8((pc >> 8) & 0x00ff), to: 0x0100 + UInt16(stkp))
+        bus.write(Value((pc >> 8) & 0x00ff), to: 0x0100 + Address(stkp))
         stkp -= 1
-        bus.write(UInt8(pc & 0x00ff), to: 0x0100 + UInt16(stkp))
+        bus.write(Value(pc & 0x00ff), to: 0x0100 + Address(stkp))
         stkp -= 1
         
         // Push the status register to the stack.
         status.remove(.break)
         status.insert(.unused)
         status.insert(.disableInterrupts)
-        bus.write(status.rawValue, to: 0x0100 + UInt16(stkp))
+        bus.write(status.rawValue, to: 0x0100 + Address(stkp))
         stkp -= 1
         
         // Read the new program counter location from a specific address.
-        let nmiAddress: UInt16 = 0xfffa
-        let lo = UInt16(bus.read(from: nmiAddress + 0))
-        let hi = UInt16(bus.read(from: nmiAddress + 1))
+        let nmiAddress: Address = 0xfffa
+        let lo = Address(bus.read(from: nmiAddress + 0))
+        let hi = Address(bus.read(from: nmiAddress + 1))
         pc = (hi << 8) | lo
         
         // Non-maskable interrupt requests take time.
@@ -231,7 +231,7 @@ final class MOS6502 {
     /// - parameter start: The address to begin disassembling.
     /// - parameter stop: The address to stop disassembling.
     /// - returns: A dictionary that contains the address as keys and instructions as strings.
-    func disassemble(start: UInt16, stop: UInt16) -> [UInt16: String] {
+    func disassemble(start: Address, stop: Address) -> [Address: String] {
         fatalError("Not implemented!")
     }
     
@@ -668,31 +668,31 @@ extension MOS6502 {
         case XXX
     }
 
-    private func ADC(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func ADC(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         let temp = UInt16(a) + UInt16(fetchedValue) + UInt16(status.contains(.carry) ? 1 : 0)
         status.setOptions(.carry, enabled: temp > 255)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0)
         status.setOptions(.resultIsOverflowed, enabled: ((~(UInt16(a) ^ UInt16(fetchedValue)) & (UInt16(a) ^ temp)) & 0x0080) > 0)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x80) > 0)
-        a = UInt8(temp & 0x00ff)
+        a = Value(temp & 0x00ff)
         
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func SBC(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func SBC(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = UInt16(bus.read(from: address))
         let temp = UInt16(a) + fetchedValue + UInt16(status.contains(.carry) ? 1 : 0)
         status.setOptions(.carry, enabled: (temp & 0xff00) > 0)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0)
         status.setOptions(.resultIsOverflowed, enabled: ((temp ^ UInt16(a)) & (temp ^ fetchedValue) & 0x0080) > 0)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
-        a = UInt8(temp & 0x00ff)
+        a = Value(temp & 0x00ff)
 
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func AND(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func AND(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         a = a & fetchedValue
         status.setOptions(.resultIsZero, enabled: a == 0x00)
@@ -701,7 +701,7 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func ASL(_ address: UInt16, _ addressMode: AddressMode) {
+    private func ASL(_ address: Address, _ addressMode: AddressMode) {
         let fetchedValue = UInt16(bus.read(from: address))
         let temp = fetchedValue << 1
         status.setOptions(.carry, enabled: (temp & 0xff00) > 0)
@@ -709,54 +709,54 @@ extension MOS6502 {
         status.setOptions(.resultIsNegative, enabled: (temp & 0x80) > 0)
         
         if addressMode == .IMP {
-            a = UInt8(fetchedValue & 0x00ff)
+            a = Value(fetchedValue & 0x00ff)
         } else {
-            bus.write(UInt8(fetchedValue & 0x00ff), to: address)
+            bus.write(Value(fetchedValue & 0x00ff), to: address)
         }
     }
     
     
-    private func BCS(_ relativeAddress: UInt16) -> UInt8 {
+    private func BCS(_ relativeAddress: Address) -> UInt8 {
         guard status.contains(.carry) else { return 0 }
         return BXX(relativeAddress)
     }
     
-    private func BCC(_ relativeAddress: UInt16) -> UInt8 {
+    private func BCC(_ relativeAddress: Address) -> UInt8 {
         guard !status.contains(.carry) else { return 0 }
         return BXX(relativeAddress)
     }
     
-    private func BEQ(_ relativeAddress: UInt16) -> UInt8 {
+    private func BEQ(_ relativeAddress: Address) -> UInt8 {
         guard status.contains(.resultIsZero) else { return 0 }
         return BXX(relativeAddress)
     }
     
-    private func BNE(_ relativeAddress: UInt16) -> UInt8 {
+    private func BNE(_ relativeAddress: Address) -> UInt8 {
         guard !status.contains(.resultIsZero) else { return 0 }
         return BXX(relativeAddress)
     }
     
-    private func BMI(_ relativeAddress: UInt16) -> UInt8 {
+    private func BMI(_ relativeAddress: Address) -> UInt8 {
         guard status.contains(.resultIsNegative) else { return 0 }
         return BXX(relativeAddress)
     }
     
-    private func BPL(_ relativeAddress: UInt16) -> UInt8 {
+    private func BPL(_ relativeAddress: Address) -> UInt8 {
         guard !status.contains(.resultIsNegative) else { return 0 }
         return BXX(relativeAddress)
     }
     
-    private func BVS(_ relativeAddress: UInt16) -> UInt8 {
+    private func BVS(_ relativeAddress: Address) -> UInt8 {
         guard status.contains(.resultIsOverflowed) else { return 0 }
         return BXX(relativeAddress)
     }
     
-    private func BVC(_ relativeAddress: UInt16) -> UInt8 {
+    private func BVC(_ relativeAddress: Address) -> UInt8 {
         guard !status.contains(.resultIsOverflowed) else { return 0 }
         return BXX(relativeAddress)
     }
     
-    private func BXX(_ relativeAddress: UInt16) -> UInt8 {
+    private func BXX(_ relativeAddress: Address) -> UInt8 {
         let address = pc &+ relativeAddress
         
         defer {
@@ -771,7 +771,7 @@ extension MOS6502 {
     }
     
     
-    private func BIT(_ address: UInt16) {
+    private func BIT(_ address: Address) {
         let fetchedValue = bus.read(from: address)
         let temp = a & fetchedValue
         status.setOptions(.resultIsZero, enabled: (temp & 0x00FF) == 0x00)
@@ -783,17 +783,17 @@ extension MOS6502 {
         pc += 1
         
         status.insert(.disableInterrupts)
-        bus.write(UInt8((pc >> 8) & 0x00FF), to: 0x0100 + UInt16(stkp))
+        bus.write(Value((pc >> 8) & 0x00FF), to: 0x0100 + Address(stkp))
         stkp -= 1
-        bus.write(UInt8(pc & 0x00FF), to: 0x0100 + UInt16(stkp));
+        bus.write(Value(pc & 0x00FF), to: 0x0100 + Address(stkp));
         stkp -= 1
 
         status.insert(.break)
-        bus.write(status.rawValue, to: 0x0100 + UInt16(stkp))
+        bus.write(status.rawValue, to: 0x0100 + Address(stkp))
         stkp -= 1
         status.remove(.break)
 
-        pc = UInt16(bus.read(from: 0xfffe)) | (UInt16(bus.read(from: 0xffff)) << 8)
+        pc = Address(bus.read(from: 0xfffe)) | (Address(bus.read(from: 0xffff)) << 8)
     }
     
     
@@ -814,7 +814,7 @@ extension MOS6502 {
     }
     
     
-    private func CMP(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func CMP(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         let temp = UInt16(a) - UInt16(fetchedValue)
         status.setOptions(.carry, enabled: a >= fetchedValue)
@@ -824,7 +824,7 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func CPX(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func CPX(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         let temp = UInt16(x) - UInt16(fetchedValue)
         status.setOptions(.carry, enabled: x >= fetchedValue)
@@ -834,7 +834,7 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
 
-    private func CPY(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func CPY(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         let temp = UInt16(y) - UInt16(fetchedValue)
         status.setOptions(.carry, enabled: y >= fetchedValue)
@@ -845,7 +845,7 @@ extension MOS6502 {
     }
     
     
-    private func DEC(_ address: UInt16) {
+    private func DEC(_ address: Address) {
         let fetchedValue = bus.read(from: address)
         let temp = fetchedValue - 1
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x0000)
@@ -865,7 +865,7 @@ extension MOS6502 {
     }
     
     
-    private func EOR(_ address: UInt16) {
+    private func EOR(_ address: Address) {
         let fetchedValue = bus.read(from: address)
         a = a ^ fetchedValue
         status.setOptions(.resultIsZero, enabled: a == 0x00)
@@ -873,7 +873,7 @@ extension MOS6502 {
     }
     
     
-    private func INC(_ address: UInt16) {
+    private func INC(_ address: Address) {
         let fetchedValue = bus.read(from: address)
         let temp = fetchedValue + 1
         bus.write(temp, to: address)
@@ -894,23 +894,23 @@ extension MOS6502 {
     }
 
     
-    private func JMP(_ address: UInt16) {
+    private func JMP(_ address: Address) {
         pc = address
     }
     
-    private func JSR(_ address: UInt16) {
+    private func JSR(_ address: Address) {
         pc -= 1
         
-        bus.write(UInt8((pc >> 8) & 0x00ff), to: 0x0100 + UInt16(stkp))
+        bus.write(Value((pc >> 8) & 0x00ff), to: 0x0100 + Address(stkp))
         stkp -= 1
-        bus.write(UInt8(pc & 0x00ff), to: 0x0100 + UInt16(stkp))
+        bus.write(Value(pc & 0x00ff), to: 0x0100 + Address(stkp))
         stkp -= 1
         
         pc = address
     }
     
     
-    private func LDA(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func LDA(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         a = fetchedValue
         status.setOptions(.resultIsZero, enabled: a == 0x00)
@@ -919,7 +919,7 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func LDX(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func LDX(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         x = fetchedValue
         status.setOptions(.resultIsZero, enabled: x == 0x00)
@@ -928,7 +928,7 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
 
-    private func LDY(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func LDY(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         y = fetchedValue
         status.setOptions(.resultIsZero, enabled: y == 0x00)
@@ -938,7 +938,7 @@ extension MOS6502 {
     }
     
     
-    private func LSR(_ address: UInt16, _ addressMode: AddressMode) {
+    private func LSR(_ address: Address, _ addressMode: AddressMode) {
         let fetchedValue = bus.read(from: address)
         status.setOptions(.carry, enabled: (fetchedValue & 0x0001) > 0)
         let temp = fetchedValue >> 1
@@ -946,9 +946,9 @@ extension MOS6502 {
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
         
         if addressMode == .IMP {
-            a = UInt8(temp & 0x00ff)
+            a = Value(temp & 0x00ff)
         } else {
-            bus.write(UInt8(temp & 0x00ff), to: address)
+            bus.write(Value(temp & 0x00ff), to: address)
         }
     }
     
@@ -961,7 +961,7 @@ extension MOS6502 {
         }
     }
     
-    private func ORA(_ address: UInt16, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func ORA(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
         a = a | fetchedValue
         status.setOptions(.resultIsZero, enabled: a == 0x00)
@@ -978,7 +978,7 @@ extension MOS6502 {
     private func PHP() {
         status.insert(.break)
         status.insert(.unused)
-        bus.write(status.rawValue, to: 0x0100 + UInt16(stkp))
+        bus.write(status.rawValue, to: 0x0100 + Address(stkp))
         status.remove(.break)
         status.remove(.unused)
         stkp -= 1
@@ -986,18 +986,18 @@ extension MOS6502 {
     
     private func PLA() {
         stkp += 1
-        a = bus.read(from: 0x0100 + UInt16(stkp))
+        a = bus.read(from: 0x0100 + Address(stkp))
         status.setOptions(.resultIsZero, enabled: a == 0x00)
         status.setOptions(.resultIsNegative, enabled: (a & 0x80) > 0)
     }
     
     private func PLP() {
         stkp += 1
-        status = Status(rawValue: bus.read(from: 0x0100 + UInt16(stkp)))
+        status = Status(rawValue: bus.read(from: 0x0100 + Address(stkp)))
         status.insert(.unused)
     }
     
-    private func ROL(_ address: UInt16, _ addressMode: AddressMode) {
+    private func ROL(_ address: Address, _ addressMode: AddressMode) {
         let fetchedValue = bus.read(from: address)
         let temp = UInt16(fetchedValue << 1) | (status.contains(.carry) ? 1 : 0)
         status.setOptions(.carry, enabled: (temp & 0xff00) > 0)
@@ -1005,13 +1005,13 @@ extension MOS6502 {
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
         
         if addressMode == .IMP {
-            a = UInt8(temp & 0x00ff)
+            a = Value(temp & 0x00ff)
         } else {
-            bus.write(UInt8(temp & 0x00ff), to: address)
+            bus.write(Value(temp & 0x00ff), to: address)
         }
     }
     
-    private func ROR(_ address: UInt16, _ addressMode: AddressMode) {
+    private func ROR(_ address: Address, _ addressMode: AddressMode) {
         let fetchedValue = bus.read(from: address)
         let temp = (UInt16(status.contains(.carry) ? 1 : 0) << 7) | (UInt16(fetchedValue) >> 1)
         status.setOptions(.carry, enabled: (fetchedValue & 0x01) > 0)
@@ -1019,31 +1019,31 @@ extension MOS6502 {
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
         
         if addressMode == .IMP {
-            a = UInt8(temp & 0x00ff)
+            a = Value(temp & 0x00ff)
         } else {
-            bus.write(UInt8(temp * 0x00ff), to: address)
+            bus.write(Value(temp * 0x00ff), to: address)
         }
     }
     
     private func RTI() {
         // We assume IMP address mode.
         stkp += 1
-        status = Status(rawValue: bus.read(from: 0x0100 + UInt16(stkp)))
+        status = Status(rawValue: bus.read(from: 0x0100 + Address(stkp)))
         status.remove(.break)
         status.remove(.unused)
 
         stkp += 1
-        pc = UInt16(bus.read(from: 0x0100 + UInt16(stkp)))
+        pc = Address(bus.read(from: 0x0100 + Address(stkp)))
         stkp += 1
-        pc |= UInt16(bus.read(from: 0x0100 + UInt16(stkp))) << 8
+        pc |= Address(bus.read(from: 0x0100 + Address(stkp))) << 8
     }
     
     private func RTS() {
         // We assume IMP address mode.
         stkp += 1
-        pc = UInt16(bus.read(from: 0x0100 + UInt16(stkp)))
+        pc = Address(bus.read(from: 0x0100 + Address(stkp)))
         stkp += 1
-        pc |= UInt16(bus.read(from: 0x0100 + UInt16(stkp))) << 8
+        pc |= Address(bus.read(from: 0x0100 + Address(stkp))) << 8
 
         pc += 1
     }
@@ -1060,15 +1060,15 @@ extension MOS6502 {
         status.insert(.disableInterrupts)
     }
     
-    private func STA(_ address: UInt16) {
+    private func STA(_ address: Address) {
         bus.write(a, to: address)
     }
     
-    private func STX(_ address: UInt16) {
+    private func STX(_ address: Address) {
         bus.write(x, to: address)
     }
     
-    private func STY(_ address: UInt16) {
+    private func STY(_ address: Address) {
         bus.write(y, to: address)
     }
     
@@ -1114,7 +1114,7 @@ extension MOS6502 {
         case IMP, IMM, ABS, ABX, ABY, REL, ZP0, ZPX, ZPY, IND, IZX, IZY
     }
     
-    private typealias ReadAddressResult = (address: UInt16, crossedPageBoundary: Bool)
+    private typealias ReadAddressResult = (address: Address, crossedPageBoundary: Bool)
 
     /// Implied
     ///
@@ -1137,9 +1137,9 @@ extension MOS6502 {
     ///
     /// A full 16-bit address is loaded and used.
     private func ABS() -> ReadAddressResult {
-        let lo = UInt16(bus.read(from: pc))
+        let lo = Address(bus.read(from: pc))
         pc += 1
-        let hi = UInt16(bus.read(from: pc))
+        let hi = Address(bus.read(from: pc))
         pc += 1
         
         let address = (hi << 8) | lo
@@ -1151,13 +1151,13 @@ extension MOS6502 {
     ///
     /// The same as `ABS`, but the value of the `x` register is added to the address.
     private func ABX() -> ReadAddressResult {
-        let lo = UInt16(bus.read(from: pc))
+        let lo = Address(bus.read(from: pc))
         pc += 1
-        let hi = UInt16(bus.read(from: pc))
+        let hi = Address(bus.read(from: pc))
         pc += 1
         
         var address = (hi << 8) | lo
-        address += UInt16(x)
+        address += Address(x)
         
         let crossedPageBoundary = (address & 0xff00) != (hi << 8)
         
@@ -1168,13 +1168,13 @@ extension MOS6502 {
     ///
     /// The same as `ABS`, but the value of the `y` register is added to the address.
     private func ABY() -> ReadAddressResult {
-        let lo = UInt16(bus.read(from: pc))
+        let lo = Address(bus.read(from: pc))
         pc += 1
-        let hi = UInt16(bus.read(from: pc))
+        let hi = Address(bus.read(from: pc))
         pc += 1
         
         var address = (hi << 8) | lo
-        address += UInt16(y)
+        address += Address(y)
         
         let crossedPageBoundary = (address & 0xff00) != (hi << 8)
         
@@ -1185,7 +1185,7 @@ extension MOS6502 {
     ///
     /// The read address is used as a relative offset to the current address of the program counter.
     private func REL() -> ReadAddressResult {
-        var relativeAddress = UInt16(bus.read(from: pc))
+        var relativeAddress = Address(bus.read(from: pc))
         pc += 1
         
         if (relativeAddress & 0x80) > 0 {
@@ -1200,7 +1200,7 @@ extension MOS6502 {
     /// Allows addressing an absolute address in the first `0xff` bytes of the address range using
     /// only a single byte.
     private func ZP0() -> ReadAddressResult {
-        var address = UInt16(bus.read(from: pc))
+        var address = Address(bus.read(from: pc))
         address &= 0x00ff
         pc += 1
         
@@ -1212,7 +1212,7 @@ extension MOS6502 {
     /// Allows addressing an absolute address in the first `0xff` bytes of the address range using
     /// the value of the `x` register.
     private func ZPX() -> ReadAddressResult {
-        var address = UInt16(bus.read(from: pc + UInt16(x)))
+        var address = Address(bus.read(from: pc + Address(x)))
         address &= 0x00ff
         pc += 1
         
@@ -1224,7 +1224,7 @@ extension MOS6502 {
     /// Allows addressing an absolute address in the first `0xff` bytes of the address range using
     /// the value of the `y` register.
     private func ZPY() -> ReadAddressResult {
-        var address = UInt16(bus.read(from: pc + UInt16(y)))
+        var address = Address(bus.read(from: pc + Address(y)))
         address &= 0x00ff
         pc += 1
         
@@ -1235,18 +1235,18 @@ extension MOS6502 {
     ///
     /// Reads an address that points to another address where the actual value is stored.
     private func IND() -> ReadAddressResult {
-        let ptrLo = UInt16(bus.read(from: pc))
+        let ptrLo = Address(bus.read(from: pc))
         pc += 1
-        let ptrHi = UInt16(bus.read(from: pc))
+        let ptrHi = Address(bus.read(from: pc))
         pc += 1
         
         let ptr = (ptrHi << 8) | ptrLo
 
         let address: UInt16
         if (ptrLo == 0x00ff) { // Simulate page boundary hardware bug.
-            address = (UInt16(bus.read(from: ptr & 0xff00)) << 8) | UInt16(bus.read(from: ptr + 0))
+            address = (Address(bus.read(from: ptr & 0xff00)) << 8) | Address(bus.read(from: ptr + 0))
         } else {
-            address = (UInt16(bus.read(from: ptr + 1)) << 8) | UInt16(bus.read(from: ptr + 0))
+            address = (Address(bus.read(from: ptr + 1)) << 8) | Address(bus.read(from: ptr + 0))
         }
         
         return (address, false)
@@ -1256,11 +1256,11 @@ extension MOS6502 {
     ///
     /// The 8-bit address is offset by the value of the `x` register to index a location in the first page.
     private func IZX() -> ReadAddressResult {
-        let ptr = UInt16(bus.read(from: pc))
+        let ptr = Address(bus.read(from: pc))
         pc += 1
         
-        let lo = UInt16(bus.read(from: (ptr + UInt16(x)) & 0x00ff))
-        let hi = UInt16(bus.read(from: (ptr + UInt16(x) + 1) & 0xff00))
+        let lo = Address(bus.read(from: (ptr + Address(x)) & 0x00ff))
+        let hi = Address(bus.read(from: (ptr + Address(x) + 1) & 0xff00))
         let address = (hi << 8) | lo
         
         return (address, false)
@@ -1271,14 +1271,14 @@ extension MOS6502 {
     /// The 8-bit address is indexes a location in the first page. The value in the `y` register are used to
     /// offset this address.
     private func IZY() -> ReadAddressResult {
-        let ptr = UInt16(bus.read(from: pc))
+        let ptr = Address(bus.read(from: pc))
         pc += 1
         
-        let lo = UInt16(bus.read(from: ptr & 0x00ff))
-        let hi = UInt16(bus.read(from: (ptr + 1) & 0xff00))
+        let lo = Address(bus.read(from: ptr & 0x00ff))
+        let hi = Address(bus.read(from: (ptr + 1) & 0xff00))
         
         var address = (hi << 8) | lo
-        address += UInt16(y)
+        address += Address(y)
         
         let crossedPageBoundary = (address & 0xff00) != (hi << 8)
         
