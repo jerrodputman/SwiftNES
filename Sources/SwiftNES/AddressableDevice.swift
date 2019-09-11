@@ -28,7 +28,7 @@ protocol AddressableDevice: class {
     ///
     /// - parameter address: The address.
     /// - returns: Whether or not the device responds to the address.
-    func respondsTo(_ address: UInt16) -> Bool
+    func respondsTo(_ address: Address) -> Bool
 }
 
 /// A protocol that describes a device that is addressable on a system bus and can be read from.
@@ -37,7 +37,7 @@ protocol AddressableReadDevice: AddressableDevice {
     ///
     /// - parameter address: The address to read from.
     /// - returns: The value stored at the address.
-    func read(from address: UInt16) -> UInt8
+    func read(from address: Address) -> Value
 }
 
 /// A protocol that describes a device that is addressable on a system bus and can be written to.
@@ -46,7 +46,7 @@ protocol AddressableWriteDevice: AddressableDevice {
     ///
     /// - parameter data: The data to be written.
     /// - parameter address: The address to write to.
-    func write(_ data: UInt8, to address: UInt16)
+    func write(_ data: Value, to address: Address)
 }
 
 /// A protocol that describes a device that is addressable on a system bus and can be read from or written to.

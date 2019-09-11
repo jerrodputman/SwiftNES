@@ -42,8 +42,8 @@ final class Bus {
     /// - note: If a device does not respond to the address, `0` will be returned.
     ///
     /// - parameter address: The address to read from.
-    /// - returns: The data that was read from a device on the bus.
-    func read(from address: UInt16) -> UInt8 {
+    /// - returns: The value that was read from a device on the bus.
+    func read(from address: Address) -> Value {
         guard let deviceToReadFrom = addressableDevices
             .first(where: { $0.respondsTo(address) })
             as? AddressableReadDevice else { return 0 }
@@ -55,14 +55,14 @@ final class Bus {
     ///
     /// - note: If a device does not respond to the address, this method does nothing.
     ///
-    /// - parameter data: The data to write to the bus.
-    /// - parameter address: The addres to write to.
-    func write(_ data: UInt8, to address: UInt16) {
+    /// - parameter value: The value to write to the bus.
+    /// - parameter address: The address to write to.
+    func write(_ value: Value, to address: Address) {
         guard let deviceToWriteTo = addressableDevices
             .first(where: { $0.respondsTo(address) })
             as? AddressableWriteDevice else { return }
 
-        deviceToWriteTo.write(data, to: address)
+        deviceToWriteTo.write(value, to: address)
     }
     
     
