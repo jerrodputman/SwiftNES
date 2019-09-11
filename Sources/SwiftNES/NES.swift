@@ -29,9 +29,14 @@ final class NES {
 
     /// Creates a virtual NES.
     init() {
-        ram = try! RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x0000...0xffff)
-        let bus = Bus(addressableDevices: [ram])
-        cpu = MOS6502(bus: bus)
+        ppuCartridgeConnector = CartridgeConnector(addressRange: 0x0000...0x1fff)
+        let ppuBus = Bus(addressableDevices: [ppuCartridgeConnector])
+        ppu = PixelProcessingUnit(bus: ppuBus)
+        
+        ram = try! RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x0000...0x1fff)
+        cpuCartridgeConnector = CartridgeConnector(addressRange: 0x8000...0xffff)
+        let cpuBus = Bus(addressableDevices: [ram, ppu, cpuCartridgeConnector])
+        cpu = MOS6502(bus: cpuBus)
     }
 
     
@@ -40,6 +45,23 @@ final class NES {
     /// The CPU.
     let cpu: MOS6502
     
-    /// The RAM.
+    /// The CPU's RAM.
     let ram: RandomAccessMemoryDevice
+    
+    /// Connects a cartridge to the CPU bus.
+    let cpuCartridgeConnector: CartridgeConnector
+    
+    /// The PPU.
+    let ppu: PixelProcessingUnit
+    
+    /// Connects a cartridge to the PPU bus.
+    let ppuCartridgeConnector: CartridgeConnector
+
+    /// The cartridge, if it exists.
+    var cartridge: Cartridge? = nil {
+        didSet {
+            cpuCartridgeConnector.cartridge = cartridge
+            ppuCartridgeConnector.cartridge = cartridge
+        }
+    }
 }

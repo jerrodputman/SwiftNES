@@ -8,7 +8,7 @@ final class SwiftNESTests: XCTestCase {
         nes = NES()
     }
     
-    func testMultiply10By3() {
+    func testMultiply10By3() throws {
         // Load Program (assembled at https://www.masswerk.at/6502/assembler.html)
         /*
             *=$8000
@@ -29,18 +29,16 @@ final class SwiftNESTests: XCTestCase {
             NOP
         */
         let program = "A2 0A 8E 00 00 A2 03 8E 01 00 AC 00 00 A9 00 18 6D 01 00 88 D0 FA 8D 02 00 EA EA EA"
-            .hexToUInt8
-        nes.ram.replaceSubrange(0x8700..<(0x8700 + UInt16(program.count)), with: program)
+        let cartridge = try Cartridge(string: program)
+        XCTAssert(cartridge.read(from: 0x8000) == 0xa2, "Program not loaded into cartridge")
         
-        XCTAssert(nes.ram[0x8700] == 0xa2, "Program not loaded in RAM")
-
-        nes.ram[0xfffc] = 0x00
-        nes.ram[0xfffd] = 0x87
+        nes.cartridge = cartridge
+        XCTAssertNotNil(nes.cartridge, "Cartridge not inserted")
         
         nes.cpu.reset()
-        XCTAssert(nes.cpu.pc == 0x8700, "Reset did not place program counter to 0x8700")
+        XCTAssert(nes.cpu.pc == 0x8000, "Reset did not place program counter to 0x8000")
         
-        while nes.cpu.pc < 0x8700 + program.count {
+        while nes.cpu.pc < 0x8000 + program.hexToUInt8.count {
             nes.cpu.clock()
         }
         
@@ -61,36 +59,4 @@ final class SwiftNESTests: XCTestCase {
     static var allTests = [
         ("testMultiply10By3", testMultiply10By3),
     ]
-}
-
-extension String {
-    
-    var hexToUInt8: [UInt8] {
-        let allowedCharacters = CharacterSet(charactersIn: "01234567890ABCDEF")
-        let filteredCharacters = self.unicodeScalars.filter { allowedCharacters.contains($0) }
-        
-        var bytes = [UInt8]()
-        bytes.reserveCapacity(filteredCharacters.count / 2)
-
-        // It is a lot faster to use a lookup map instead of strtoul
-        let map: [UInt8] = [
-          0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, // 01234567
-          0x08, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 89:;<=>?
-          0x00, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x00, // @ABCDEFG
-          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00  // HIJKLMNO
-        ]
-
-        // Grab two characters at a time, map them and turn it into a byte
-        var currentIndex = filteredCharacters.startIndex
-        while currentIndex != filteredCharacters.endIndex {
-            let index1 = Int(filteredCharacters[currentIndex].value & 0x1F ^ 0x10)
-            currentIndex = filteredCharacters.index(after: currentIndex)
-            let index2 = Int(filteredCharacters[currentIndex].value & 0x1F ^ 0x10)
-            currentIndex = filteredCharacters.index(after: currentIndex)
-            
-            bytes.append(map[index1] << 4 | map[index2])
-        }
-        
-        return bytes
-    }
 }
