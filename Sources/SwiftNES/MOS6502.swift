@@ -242,7 +242,7 @@ final class MOS6502 {
     private let bus: Bus
     
     /// The working instruction byte.
-    private var opcode: UInt8 = 0x00
+    private(set) var opcode: UInt8 = 0x00
     
     /// How many cycles the current instruction has remaining.
     private var cyclesRemaining: UInt8 = 0x00
@@ -276,8 +276,8 @@ final class MOS6502 {
         case .CLI: CLI()
         case .CLV: CLV()
         case .CMP: return CMP(address, crossedPageBoundary)
-        case .CPX: return CPX(address, crossedPageBoundary)
-        case .CPY: return CPY(address, crossedPageBoundary)
+        case .CPX: CPX(address)
+        case .CPY: CPY(address)
         case .DEC: DEC(address)
         case .DEX: DEX()
         case .DEY: DEY()
@@ -350,7 +350,7 @@ final class MOS6502 {
 
 extension MOS6502 {
     /// A structure representing a single instruction to be performed by the CPU.
-    private struct Instruction {
+    private struct Instruction: CustomDebugStringConvertible {
         /// The assembly mnemonic used for the instruction.
         let name: String
         
@@ -371,6 +371,10 @@ extension MOS6502 {
             self.addressMode = addressMode
             self.minimumCycleCount = minimumCycleCount
         }
+        
+        var debugDescription: String {
+            return "Instruction: \(name); address mode: \(addressMode); cycles: \(minimumCycleCount)"
+        }
     }
     
     /// An array of all of the possible instructions that the CPU can perform.
@@ -378,7 +382,7 @@ extension MOS6502 {
     /// The array can be indexed via an `Opcode`.
     static private var instructions: [Instruction] = {
         return [
-            Instruction("BRK", .BRK, .IMM, 7),
+            Instruction("BRK", .BRK, .IMM, 7), // 0x00
             Instruction("ORA", .ORA, .IZX, 6),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
@@ -395,7 +399,7 @@ extension MOS6502 {
             Instruction("ASL", .ASL, .ABS, 6),
             Instruction("???", .XXX, .IMP, 6),
 
-            Instruction("BPL", .BPL, .REL, 2),
+            Instruction("BPL", .BPL, .REL, 2), // 0x10
             Instruction("ORA", .ORA, .IZY, 5),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
@@ -412,7 +416,7 @@ extension MOS6502 {
             Instruction("ASL", .ASL, .ABX, 7),
             Instruction("???", .XXX, .IMP, 7),
         
-            Instruction("JSR", .JSR, .ABS, 6),
+            Instruction("JSR", .JSR, .ABS, 6), // 0x20
             Instruction("AND", .AND, .IZX, 6),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
@@ -429,7 +433,7 @@ extension MOS6502 {
             Instruction("ROL", .ROL, .ABS, 6),
             Instruction("???", .XXX, .IMP, 6),
         
-            Instruction("BMI", .BMI, .REL, 2),
+            Instruction("BMI", .BMI, .REL, 2), // 0x30
             Instruction("AND", .AND, .IZY, 5),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
@@ -446,7 +450,7 @@ extension MOS6502 {
             Instruction("ROL", .ROL, .ABX, 7),
             Instruction("???", .XXX, .IMP, 7),
         
-            Instruction("RTI", .RTI, .IMP, 6),
+            Instruction("RTI", .RTI, .IMP, 6), // 0x40
             Instruction("EOR", .EOR, .IZX, 6),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
@@ -463,7 +467,7 @@ extension MOS6502 {
             Instruction("LSR", .LSR, .ABS, 6),
             Instruction("???", .XXX, .IMP, 6),
         
-            Instruction("BVC", .BVC, .REL, 2),
+            Instruction("BVC", .BVC, .REL, 2), // 0x50
             Instruction("EOR", .EOR, .IZY, 5),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
@@ -480,7 +484,7 @@ extension MOS6502 {
             Instruction("LSR", .LSR, .ABX, 7),
             Instruction("???", .XXX, .IMP, 7),
         
-            Instruction("RTS", .RTS, .IMP, 6),
+            Instruction("RTS", .RTS, .IMP, 6), // 0x60
             Instruction("ADC", .ADC, .IZX, 6),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
@@ -497,7 +501,7 @@ extension MOS6502 {
             Instruction("ROR", .ROR, .ABS, 6),
             Instruction("???", .XXX, .IMP, 6),
         
-            Instruction("BVS", .BVS, .REL, 2),
+            Instruction("BVS", .BVS, .REL, 2), // 0x70
             Instruction("ADC", .ADC, .IZY, 5),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
@@ -514,7 +518,7 @@ extension MOS6502 {
             Instruction("ROR", .ROR, .ABX, 7),
             Instruction("???", .XXX, .IMP, 7),
         
-            Instruction("???", .NOP, .IMP, 2),
+            Instruction("???", .NOP, .IMP, 2), // 0x80
             Instruction("STA", .STA, .IZX, 6),
             Instruction("???", .NOP, .IMP, 2),
             Instruction("???", .XXX, .IMP, 6),
@@ -531,7 +535,7 @@ extension MOS6502 {
             Instruction("STX", .STX, .ABS, 4),
             Instruction("???", .XXX, .IMP, 4),
         
-            Instruction("BCC", .BCC, .REL, 2),
+            Instruction("BCC", .BCC, .REL, 2), // 0x90
             Instruction("STA", .STA, .IZY, 6),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 6),
@@ -548,7 +552,7 @@ extension MOS6502 {
             Instruction("???", .XXX, .IMP, 5),
             Instruction("???", .XXX, .IMP, 5),
         
-            Instruction("LDY", .LDY, .IMM, 2),
+            Instruction("LDY", .LDY, .IMM, 2), // 0xA0
             Instruction("LDA", .LDA, .IZX, 6),
             Instruction("LDX", .LDX, .IMM, 2),
             Instruction("???", .XXX, .IMP, 6),
@@ -565,7 +569,7 @@ extension MOS6502 {
             Instruction("LDX", .LDX, .ABS, 4),
             Instruction("???", .XXX, .IMP, 4),
         
-            Instruction("BCS", .BCS, .REL, 2),
+            Instruction("BCS", .BCS, .REL, 2), // 0xB0
             Instruction("LDA", .LDA, .IZY, 5),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 5),
@@ -582,11 +586,11 @@ extension MOS6502 {
             Instruction("LDX", .LDX, .ABY, 4),
             Instruction("???", .XXX, .IMP, 4),
         
-            Instruction("CPY", .CPY, .IMM, 2),
+            Instruction("CPY", .CPY, .IMM, 2), // 0xC0
             Instruction("CMP", .CMP, .IZX, 6),
             Instruction("???", .NOP, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
-            Instruction("CPY", .LDY, .ZP0, 3),
+            Instruction("CPY", .CPY, .ZP0, 3),
             Instruction("CMP", .CMP, .ZP0, 3),
             Instruction("DEC", .DEC, .ZP0, 5),
             Instruction("???", .XXX, .IMP, 5),
@@ -599,7 +603,7 @@ extension MOS6502 {
             Instruction("DEC", .DEC, .ABS, 6),
             Instruction("???", .XXX, .IMP, 6),
         
-            Instruction("BNE", .BNE, .REL, 2),
+            Instruction("BNE", .BNE, .REL, 2), // 0xD0
             Instruction("CMP", .CMP, .IZY, 5),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
@@ -616,7 +620,7 @@ extension MOS6502 {
             Instruction("DEC", .DEC, .ABX, 7),
             Instruction("???", .XXX, .IMP, 7),
         
-            Instruction("CPX", .CPX, .IMM, 2),
+            Instruction("CPX", .CPX, .IMM, 2), // 0xE0
             Instruction("SBC", .SBC, .IZX, 6),
             Instruction("???", .NOP, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
@@ -633,7 +637,7 @@ extension MOS6502 {
             Instruction("INC", .INC, .ABS, 6),
             Instruction("???", .XXX, .IMP, 6),
         
-            Instruction("BEQ", .BEQ, .REL, 2),
+            Instruction("BEQ", .BEQ, .REL, 2), // 0xF0
             Instruction("SBC", .SBC, .IZY, 5),
             Instruction("???", .XXX, .IMP, 2),
             Instruction("???", .XXX, .IMP, 8),
@@ -681,7 +685,7 @@ extension MOS6502 {
     }
     
     private func SBC(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
-        let fetchedValue = UInt16(bus.read(from: address))
+        let fetchedValue = UInt16(bus.read(from: address)) ^ 0x00ff
         let temp = UInt16(a) + fetchedValue + UInt16(status.contains(.carry) ? 1 : 0)
         status.setOptions(.carry, enabled: (temp & 0xff00) > 0)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0)
@@ -696,22 +700,22 @@ extension MOS6502 {
         let fetchedValue = bus.read(from: address)
         a = a & fetchedValue
         status.setOptions(.resultIsZero, enabled: a == 0x00)
-        status.setOptions(.resultIsNegative, enabled: a == 0x80)
+        status.setOptions(.resultIsNegative, enabled: (a & 0x80) > 0)
         
         return crossedPageBoundary ? 1 : 0
     }
     
     private func ASL(_ address: Address, _ addressMode: AddressMode) {
-        let fetchedValue = UInt16(bus.read(from: address))
+        let fetchedValue = (addressMode != .IMP) ? UInt16(bus.read(from: address)) : UInt16(a)
         let temp = fetchedValue << 1
         status.setOptions(.carry, enabled: (temp & 0xff00) > 0)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x00)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x80) > 0)
         
         if addressMode == .IMP {
-            a = Value(fetchedValue & 0x00ff)
+            a = Value(temp & 0x00ff)
         } else {
-            bus.write(Value(fetchedValue & 0x00ff), to: address)
+            bus.write(Value(temp & 0x00ff), to: address)
         }
     }
     
@@ -775,8 +779,8 @@ extension MOS6502 {
         let fetchedValue = bus.read(from: address)
         let temp = a & fetchedValue
         status.setOptions(.resultIsZero, enabled: (temp & 0x00FF) == 0x00)
-        status.setOptions(.resultIsNegative, enabled: (temp & (1 << 7)) > 0)
-        status.setOptions(.resultIsOverflowed, enabled: (temp & (1 << 6)) > 0)
+        status.setOptions(.resultIsNegative, enabled: (fetchedValue & (1 << 7)) > 0)
+        status.setOptions(.resultIsOverflowed, enabled: (fetchedValue & (1 << 6)) > 0)
     }
     
     private func BRK() {
@@ -784,13 +788,13 @@ extension MOS6502 {
         
         status.insert(.disableInterrupts)
         bus.write(Value((pc >> 8) & 0x00FF), to: 0x0100 + Address(stkp))
-        stkp -= 1
+        stkp &-= 1
         bus.write(Value(pc & 0x00FF), to: 0x0100 + Address(stkp));
-        stkp -= 1
+        stkp &-= 1
 
         status.insert(.break)
         bus.write(status.rawValue, to: 0x0100 + Address(stkp))
-        stkp -= 1
+        stkp &-= 1
         status.remove(.break)
 
         pc = Address(bus.read(from: 0xfffe)) | (Address(bus.read(from: 0xffff)) << 8)
@@ -816,7 +820,7 @@ extension MOS6502 {
     
     private func CMP(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
         let fetchedValue = bus.read(from: address)
-        let temp = UInt16(a) - UInt16(fetchedValue)
+        let temp = UInt16(a) &- UInt16(fetchedValue)
         status.setOptions(.carry, enabled: a >= fetchedValue)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x0000)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
@@ -824,42 +828,39 @@ extension MOS6502 {
         return crossedPageBoundary ? 1 : 0
     }
     
-    private func CPX(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func CPX(_ address: Address) {
         let fetchedValue = bus.read(from: address)
-        let temp = UInt16(x) - UInt16(fetchedValue)
+        let temp = UInt16(x) &- UInt16(fetchedValue)
         status.setOptions(.carry, enabled: x >= fetchedValue)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x0000)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
-        
-        return crossedPageBoundary ? 1 : 0
     }
 
-    private func CPY(_ address: Address, _ crossedPageBoundary: Bool) -> UInt8 {
+    private func CPY(_ address: Address) {
         let fetchedValue = bus.read(from: address)
-        let temp = UInt16(y) - UInt16(fetchedValue)
+        let temp = UInt16(y) &- UInt16(fetchedValue)
         status.setOptions(.carry, enabled: y >= fetchedValue)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x0000)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
-        
-        return crossedPageBoundary ? 1 : 0
     }
     
     
     private func DEC(_ address: Address) {
         let fetchedValue = bus.read(from: address)
-        let temp = fetchedValue - 1
+        let temp = fetchedValue &- 1
+        bus.write(UInt8(temp & 0x00ff), to: address)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x0000)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
     }
     
     private func DEX() {
-        x -= 1
+        x &-= 1
         status.setOptions(.resultIsZero, enabled: x == 0x00)
         status.setOptions(.resultIsNegative, enabled: (x & 0x80) > 0)
     }
 
     private func DEY() {
-        y -= 1
+        y &-= 1
         status.setOptions(.resultIsZero, enabled: y == 0x00)
         status.setOptions(.resultIsNegative, enabled: (y & 0x80) > 0)
     }
@@ -875,20 +876,20 @@ extension MOS6502 {
     
     private func INC(_ address: Address) {
         let fetchedValue = bus.read(from: address)
-        let temp = fetchedValue + 1
+        let temp = fetchedValue &+ 1
         bus.write(temp, to: address)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x0000)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
     }
     
     private func INX() {
-        x += 1
+        x &+= 1
         status.setOptions(.resultIsZero, enabled: x == 0x00)
         status.setOptions(.resultIsNegative, enabled: (x & 0x80) > 0)
     }
 
     private func INY() {
-        y += 1
+        y &+= 1
         status.setOptions(.resultIsZero, enabled: y == 0x00)
         status.setOptions(.resultIsNegative, enabled: (y & 0x80) > 0)
     }
@@ -902,9 +903,9 @@ extension MOS6502 {
         pc -= 1
         
         bus.write(Value((pc >> 8) & 0x00ff), to: 0x0100 + Address(stkp))
-        stkp -= 1
+        stkp &-= 1
         bus.write(Value(pc & 0x00ff), to: 0x0100 + Address(stkp))
-        stkp -= 1
+        stkp &-= 1
         
         pc = address
     }
@@ -939,9 +940,9 @@ extension MOS6502 {
     
     
     private func LSR(_ address: Address, _ addressMode: AddressMode) {
-        let fetchedValue = bus.read(from: address)
+        let fetchedValue = (addressMode != .IMP) ? UInt16(bus.read(from: address)) : UInt16(a)
         status.setOptions(.carry, enabled: (fetchedValue & 0x0001) > 0)
-        let temp = fetchedValue >> 1
+        let temp = UInt16(fetchedValue) >> 1
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x0000)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
         
@@ -972,7 +973,7 @@ extension MOS6502 {
     
     private func PHA() {
         bus.write(a, to: 0x0100 + UInt16(stkp))
-        stkp -= 1
+        stkp &-= 1
     }
     
     private func PHP() {
@@ -981,25 +982,25 @@ extension MOS6502 {
         bus.write(status.rawValue, to: 0x0100 + Address(stkp))
         status.remove(.break)
         status.remove(.unused)
-        stkp -= 1
+        stkp &-= 1
     }
     
     private func PLA() {
-        stkp += 1
+        stkp &+= 1
         a = bus.read(from: 0x0100 + Address(stkp))
         status.setOptions(.resultIsZero, enabled: a == 0x00)
         status.setOptions(.resultIsNegative, enabled: (a & 0x80) > 0)
     }
     
     private func PLP() {
-        stkp += 1
+        stkp &+= 1
         status = Status(rawValue: bus.read(from: 0x0100 + Address(stkp)))
         status.insert(.unused)
     }
     
     private func ROL(_ address: Address, _ addressMode: AddressMode) {
-        let fetchedValue = bus.read(from: address)
-        let temp = UInt16(fetchedValue << 1) | (status.contains(.carry) ? 1 : 0)
+        let fetchedValue = (addressMode != .IMP) ? UInt16(bus.read(from: address)) : UInt16(a)
+        let temp = (UInt16(fetchedValue) << 1) | (status.contains(.carry) ? 1 : 0)
         status.setOptions(.carry, enabled: (temp & 0xff00) > 0)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x0000)
         status.setOptions(.resultIsNegative, enabled: (temp & 0x0080) > 0)
@@ -1012,7 +1013,7 @@ extension MOS6502 {
     }
     
     private func ROR(_ address: Address, _ addressMode: AddressMode) {
-        let fetchedValue = bus.read(from: address)
+        let fetchedValue = (addressMode != .IMP) ? UInt16(bus.read(from: address)) : UInt16(a)
         let temp = (UInt16(status.contains(.carry) ? 1 : 0) << 7) | (UInt16(fetchedValue) >> 1)
         status.setOptions(.carry, enabled: (fetchedValue & 0x01) > 0)
         status.setOptions(.resultIsZero, enabled: (temp & 0x00ff) == 0x00)
@@ -1021,28 +1022,28 @@ extension MOS6502 {
         if addressMode == .IMP {
             a = Value(temp & 0x00ff)
         } else {
-            bus.write(Value(temp * 0x00ff), to: address)
+            bus.write(Value(temp & 0x00ff), to: address)
         }
     }
     
     private func RTI() {
         // We assume IMP address mode.
-        stkp += 1
+        stkp &+= 1
         status = Status(rawValue: bus.read(from: 0x0100 + Address(stkp)))
         status.remove(.break)
         status.remove(.unused)
 
-        stkp += 1
+        stkp &+= 1
         pc = Address(bus.read(from: 0x0100 + Address(stkp)))
-        stkp += 1
+        stkp &+= 1
         pc |= Address(bus.read(from: 0x0100 + Address(stkp))) << 8
     }
     
     private func RTS() {
         // We assume IMP address mode.
-        stkp += 1
+        stkp &+= 1
         pc = Address(bus.read(from: 0x0100 + Address(stkp)))
-        stkp += 1
+        stkp &+= 1
         pc |= Address(bus.read(from: 0x0100 + Address(stkp))) << 8
 
         pc += 1
@@ -1086,14 +1087,14 @@ extension MOS6502 {
     
     private func TSX() {
         x = stkp
-        status.setOptions(.resultIsZero, enabled: y == 0x00)
-        status.setOptions(.resultIsNegative, enabled: (y & 0x80) > 0)
+        status.setOptions(.resultIsZero, enabled: x == 0x00)
+        status.setOptions(.resultIsNegative, enabled: (x & 0x80) > 0)
     }
     
     private func TXA() {
         a = x
-        status.setOptions(.resultIsZero, enabled: y == 0x00)
-        status.setOptions(.resultIsNegative, enabled: (y & 0x80) > 0)
+        status.setOptions(.resultIsZero, enabled: a == 0x00)
+        status.setOptions(.resultIsNegative, enabled: (a & 0x80) > 0)
     }
     
     private func TYA() {
@@ -1110,8 +1111,12 @@ extension MOS6502 {
 // MARK: - Address Modes
 
 extension MOS6502 {
-    private enum AddressMode {
+    private enum AddressMode: String, CustomDebugStringConvertible {
         case IMP, IMM, ABS, ABX, ABY, REL, ZP0, ZPX, ZPY, IND, IZX, IZY
+        
+        var debugDescription: String {
+            return rawValue
+        }
     }
     
     private typealias ReadAddressResult = (address: Address, crossedPageBoundary: Bool)
@@ -1174,7 +1179,7 @@ extension MOS6502 {
         pc += 1
         
         var address = (hi << 8) | lo
-        address += Address(y)
+        address &+= Address(y)
         
         let crossedPageBoundary = (address & 0xff00) != (hi << 8)
         
@@ -1212,7 +1217,7 @@ extension MOS6502 {
     /// Allows addressing an absolute address in the first `0xff` bytes of the address range using
     /// the value of the `x` register.
     private func ZPX() -> ReadAddressResult {
-        var address = Address(bus.read(from: pc + Address(x)))
+        var address = Address(bus.read(from: pc) &+ x)
         address &= 0x00ff
         pc += 1
         
@@ -1224,7 +1229,7 @@ extension MOS6502 {
     /// Allows addressing an absolute address in the first `0xff` bytes of the address range using
     /// the value of the `y` register.
     private func ZPY() -> ReadAddressResult {
-        var address = Address(bus.read(from: pc + Address(y)))
+        var address = Address(bus.read(from: pc) &+ y)
         address &= 0x00ff
         pc += 1
         
@@ -1260,7 +1265,7 @@ extension MOS6502 {
         pc += 1
         
         let lo = Address(bus.read(from: (ptr + Address(x)) & 0x00ff))
-        let hi = Address(bus.read(from: (ptr + Address(x) + 1) & 0xff00))
+        let hi = Address(bus.read(from: (ptr + Address(x) + 1) & 0x00ff))
         let address = (hi << 8) | lo
         
         return (address, false)
@@ -1275,10 +1280,10 @@ extension MOS6502 {
         pc += 1
         
         let lo = Address(bus.read(from: ptr & 0x00ff))
-        let hi = Address(bus.read(from: (ptr + 1) & 0xff00))
+        let hi = Address(bus.read(from: (ptr + 1) & 0x00ff))
         
         var address = (hi << 8) | lo
-        address += Address(y)
+        address &+= Address(y)
         
         let crossedPageBoundary = (address & 0xff00) != (hi << 8)
         
