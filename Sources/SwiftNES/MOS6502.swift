@@ -232,7 +232,83 @@ final class MOS6502 {
     /// - parameter stop: The address to stop disassembling.
     /// - returns: A dictionary that contains the address as keys and instructions as strings.
     func disassemble(start: Address, stop: Address) -> [Address: String] {
-        fatalError("Not implemented!")
+        var lines: [Address: String] = [:]
+        var address = start
+        
+        while address <= stop {
+            let lineAddress = Address(address)
+            
+            var line = "$\(String(format: "%04X", address)): "
+            
+            let opcode = bus.read(from: Address(address))
+            let instruction = Self.instructions[Int(opcode)]
+            address &+= 1
+            
+            line += "\(instruction.name) "
+            
+            switch instruction.addressMode {
+            case .IMP:
+                break
+            case .IMM:
+                let value = bus.read(from: Address(address))
+                address &+= 1
+                line += "#$\(String(format: "%02X", value))"
+            case .ZP0:
+                let lo = bus.read(from: Address(address))
+                address &+= 1
+                line += "$\(String(format: "%02X", lo))"
+            case .ZPX:
+                let lo = bus.read(from: Address(address))
+                address &+= 1
+                line += "$\(String(format: "%02X", lo)), X"
+            case .ZPY:
+                let lo = bus.read(from: Address(address))
+                address &+= 1
+                line += "$\(String(format: "%02X", lo)), Y"
+            case .IZX:
+                let lo = bus.read(from: Address(address))
+                address &+= 1
+                line += "($\(String(format: "%02X", lo))), X"
+            case .IZY:
+                let lo = bus.read(from: Address(address))
+                address &+= 1
+                line += "($\(String(format: "%02X", lo))), Y"
+            case .ABS:
+                let lo = Address(bus.read(from: Address(address)))
+                address &+= 1
+                let hi = Address(bus.read(from: Address(address)))
+                address &+= 1
+                line += "$\(String(format: "%04X", ((hi << 8) | lo)))"
+            case .ABX:
+                let lo = Address(bus.read(from: Address(address)))
+                address &+= 1
+                let hi = Address(bus.read(from: Address(address)))
+                address &+= 1
+                line += "$\(String(format: "%04X", ((hi << 8) | lo))), X"
+            case .ABY:
+                let lo = Address(bus.read(from: Address(address)))
+                address &+= 1
+                let hi = Address(bus.read(from: Address(address)))
+                address &+= 1
+                line += "$\(String(format: "%04X", ((hi << 8) | lo))), Y"
+            case .IND:
+                let lo = Address(bus.read(from: Address(address)))
+                address &+= 1
+                let hi = Address(bus.read(from: Address(address)))
+                address &+= 1
+                line += "($\(String(format: "%04X", ((hi << 8) | lo))))"
+            case .REL:
+                let value = bus.read(from: Address(address))
+                address &+= 1
+                line += "$\(String(format: "%02X", value)) [$\(String(format: "%04X", Address(Int32(address) + (value < 128 ? Int32(value) : Int32(value) - 256))))]"
+            }
+            
+            line += " {\(instruction.addressMode.rawValue)}"
+            
+            lines[lineAddress] = line
+        }
+        
+        return lines
     }
     
     
