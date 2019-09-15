@@ -54,6 +54,13 @@ final class SwiftNESTests: XCTestCase {
         XCTAssert(!nes.cpu.status.contains(.resultIsOverflowed), "Status register contains V flag")
         XCTAssert(!nes.cpu.status.contains(.resultIsNegative), "Status register contains N flag")
         XCTAssert(nes.cpu.totalCycleCount == 126, "Incorrect cycle count")
+        
+        print("Disassembly:")
+        let disassembly = nes.cpu.disassemble(start: 0x8000, stop: 0x8000 + Address(program.hexToUInt8.count))
+        for key in disassembly.keys.sorted() {
+            guard let line = disassembly[key] else { continue }
+            print(line)
+        }
     }
 
     static var allTests = [
