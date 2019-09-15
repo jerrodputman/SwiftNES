@@ -41,7 +41,10 @@ class Cartridge {
     /// - note: The data should be in the `iNES` format.
     ///
     /// - parameter data: The data that should be held by the cartridge.
-    init(data: Data) throws {
+    /// - parameter programStartAddress: Forces the starting address to a specified value.
+    ///     This is typically only used for testing purposes, as all cartridges should have their program start
+    ///     address set.
+    init(data: Data, programStartAddress: Address? = nil) throws {
         var dataLocation = 0
         
         // Read the 16-byte header.
@@ -84,6 +87,12 @@ class Cartridge {
         
         // Create and store the mapper.
         mapper = try mapperType.init(programMemoryBanks: programMemoryBanks, characterMemoryBanks: characterMemoryBanks)
+        
+        // If a program start address was specified, write it to the cartridge.
+        if let programStartAddress = programStartAddress {
+            write(UInt8(programStartAddress & 0x00ff), to: 0xfffc)
+            write(UInt8(programStartAddress >> 8), to: 0xfffd)
+        }
     }
     
     /// Creates a cartridge from a program string.
