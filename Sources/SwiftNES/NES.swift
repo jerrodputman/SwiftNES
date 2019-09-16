@@ -28,7 +28,7 @@ final class NES {
     // MARK: - Initializers
 
     /// Creates a virtual NES.
-    init() {
+    public init() {
         ppuCartridgeConnector = CartridgeConnector(addressRange: 0x0000...0x1fff)
         let ppuBus = Bus(addressableDevices: [ppuCartridgeConnector])
         ppu = PixelProcessingUnit(bus: ppuBus)
@@ -58,10 +58,38 @@ final class NES {
     let ppuCartridgeConnector: CartridgeConnector
 
     /// The cartridge, if it exists.
-    var cartridge: Cartridge? = nil {
+    public var cartridge: Cartridge? = nil {
         didSet {
             cpuCartridgeConnector.cartridge = cartridge
             ppuCartridgeConnector.cartridge = cartridge
         }
     }
+    
+    
+    // MARK: - Updating the hardware
+
+    public func advanceFrame() {
+        repeat {
+            clock()
+        } while !ppu.isFrameComplete
+    }
+    
+    public func reset() {
+        cpu.reset()
+    }
+    
+    func clock() {
+        ppu.clock()
+        
+        if clockCount % 3 == 0 {
+            cpu.clock()
+        }
+        
+        clockCount += 1
+    }
+    
+
+    // MARK: - Private
+    
+    private var clockCount: UInt32 = 0
 }
