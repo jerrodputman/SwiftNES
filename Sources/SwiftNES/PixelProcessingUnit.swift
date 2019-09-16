@@ -22,7 +22,7 @@
 
 import Foundation
 
-class PixelProcessingUnit: AddressableReadWriteDevice {
+final class PixelProcessingUnit: AddressableReadWriteDevice {
     
     // MARK: - Initializers
     
