@@ -23,12 +23,12 @@
 import Foundation
 
 /// A class that represents the complete NES hardware.
-final class NES {
+public final class NES {
     
     // MARK: - Initializers
 
     /// Creates a virtual NES.
-    init() {
+    public init() {
         ppuCartridgeConnector = CartridgeConnector(addressRange: 0x0000...0x1fff)
         let ppuBus = Bus(addressableDevices: [ppuCartridgeConnector])
         ppu = PixelProcessingUnit(bus: ppuBus)
@@ -58,10 +58,60 @@ final class NES {
     let ppuCartridgeConnector: CartridgeConnector
 
     /// The cartridge, if it exists.
-    var cartridge: Cartridge? = nil {
+    public var cartridge: Cartridge? = nil {
         didSet {
             cpuCartridgeConnector.cartridge = cartridge
             ppuCartridgeConnector.cartridge = cartridge
         }
     }
+    
+    
+    // MARK: - Updating the hardware
+
+    /// Updates the hardware with the specified elapsed time.
+    ///
+    /// - parameter elapsedTime: The elapsed time since the last update.
+    public func update(elapsedTime: TimeInterval) {
+        if residualTime > 0.0 {
+            residualTime -= elapsedTime
+        } else {
+            residualTime += (1.0 / 60.0) - elapsedTime
+            advanceFrame()
+        }
+    }
+    
+    /// Advances the hardware to the end of the current frame.
+    public func advanceFrame() {
+        repeat {
+            clock()
+        } while !ppu.isFrameComplete
+    }
+    
+    /// Resets the hardware.
+    public func reset() {
+        clockCount = 0
+        residualTime = 0.0
+        
+        cpu.reset()
+    }
+    
+    /// Clocks the hardware.
+    func clock() {
+        ppu.clock()
+        
+        if clockCount % 3 == 0 {
+            cpu.clock()
+        }
+        
+        clockCount += 1
+    }
+    
+
+    // MARK: - Private
+    
+    /// The total clock count since the hardware was reset.
+    private var clockCount: UInt32 = 0
+    
+    /// The remaining residual time since the last update.
+    private var residualTime: TimeInterval = 0
 }

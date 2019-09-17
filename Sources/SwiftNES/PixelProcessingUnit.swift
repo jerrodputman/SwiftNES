@@ -22,13 +22,36 @@
 
 import Foundation
 
-class PixelProcessingUnit: AddressableReadWriteDevice {
+final class PixelProcessingUnit: AddressableReadWriteDevice {
     
     // MARK: - Initializers
     
     init(bus: Bus) {
         self.bus = bus
     }
+    
+    
+    // MARK: - External events
+    
+    func clock() {
+        
+        // TODO: Draw something.
+        
+        isFrameComplete = false
+        cycle = Self.cycleRange.index(after: cycle)
+        
+        if Self.cycleRange.contains(cycle) {
+            cycle = Self.cycleRange.lowerBound
+            scanline = Self.scanlineRange.index(after: scanline)
+            
+            if Self.scanlineRange.contains(scanline) {
+                scanline = Self.scanlineRange.lowerBound
+                isFrameComplete = true
+            }
+        }
+    }
+    
+    private(set) var isFrameComplete: Bool = false
     
     
     // MARK: - AddressableReadWriteDevice
@@ -57,5 +80,10 @@ class PixelProcessingUnit: AddressableReadWriteDevice {
     
     private let bus: Bus
     
+    private var cycle: Int16 = 0
+    private var scanline: Int16 = 0
+    
     private static let addressRange: AddressRange = 0x2000...0x3fff
+    private static let cycleRange: Range<Int16> = 0..<341
+    private static let scanlineRange: Range<Int16> = -1..<261
 }

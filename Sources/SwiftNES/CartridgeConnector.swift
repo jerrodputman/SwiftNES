@@ -26,7 +26,7 @@ import Foundation
 ///
 /// Instead of attaching the cartridge directly to the bus, a connector is used to allow for
 /// runtime inserting and removal of the cartridge.
-class CartridgeConnector: AddressableReadWriteDevice {
+final class CartridgeConnector: AddressableReadWriteDevice {
     
     // MARK: - Initializers
     

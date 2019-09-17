@@ -22,7 +22,7 @@
 
 import Foundation
 
-class Mapper000: Mapper {
+final class Mapper000: Mapper {
     
     // MARK: - Mapper
     
