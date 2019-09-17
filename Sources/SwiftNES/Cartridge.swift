@@ -32,7 +32,7 @@ enum CartridgeError: Error {
 }
 
 /// A class that represents a cartridge that can be inserted into the NES.
-final class Cartridge {
+public final class Cartridge {
     
     // MARK: - Initializers
     
