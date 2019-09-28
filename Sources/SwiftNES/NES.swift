@@ -76,15 +76,25 @@ public final class NES {
             residualTime -= elapsedTime
         } else {
             residualTime += (1.0 / 60.0) - elapsedTime
-            advanceFrame()
+            repeat { clock() } while !ppu.isFrameComplete
         }
+    }
+    
+    /// Advances the hardware to the end of the current instruction.
+    public func advanceInstruction() {
+        repeat { clock() } while !cpu.isCurrentInstructionComplete
+        
+        // The CPU is clocked slower than the PPU, so clock the hardware
+        // until the next instruction starts.
+        repeat { clock() } while cpu.isCurrentInstructionComplete
     }
     
     /// Advances the hardware to the end of the current frame.
     public func advanceFrame() {
-        repeat {
-            clock()
-        } while !ppu.isFrameComplete
+        repeat { clock() } while !ppu.isFrameComplete
+        
+        // Finish executing the current instruction.
+        repeat { clock() } while !cpu.isCurrentInstructionComplete
     }
     
     /// Resets the hardware.
@@ -95,17 +105,6 @@ public final class NES {
         cpu.reset()
     }
     
-    /// Clocks the hardware.
-    func clock() {
-        ppu.clock()
-        
-        if clockCount % 3 == 0 {
-            cpu.clock()
-        }
-        
-        clockCount += 1
-    }
-    
 
     // MARK: - Private
     
@@ -114,4 +113,16 @@ public final class NES {
     
     /// The remaining residual time since the last update.
     private var residualTime: TimeInterval = 0
+
+
+    /// Clocks the hardware.
+    private func clock() {
+        ppu.clock()
+        
+        if clockCount % 3 == 0 {
+            cpu.clock()
+        }
+        
+        clockCount += 1
+    }
 }
