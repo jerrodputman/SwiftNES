@@ -31,11 +31,17 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     }
     
     
+    // MARK: - Outputting video
+    
+    weak var videoReceiver: VideoReceiver?
+    
+    
     // MARK: - External events
     
     func clock() {
         
-        // TODO: Draw something.
+        let color: UInt32 = UInt32.random(in: 0..<2) == 1 ? 0xffffffff : 0xff000000
+        videoReceiver?.setPixel(atX: Int(cycle) - 1, y: Int(scanline), withColor: color)
         
         isFrameComplete = false
         cycle = Self.cycleRange.index(after: cycle)
