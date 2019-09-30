@@ -57,6 +57,9 @@ public final class NES {
     /// Connects a cartridge to the PPU bus.
     let ppuCartridgeConnector: CartridgeConnector
 
+    
+    // MARK: - Connecting to the inputs of the hardware
+    
     /// The cartridge, if it exists.
     public var cartridge: Cartridge? = nil {
         didSet {
@@ -64,6 +67,17 @@ public final class NES {
             ppuCartridgeConnector.cartridge = cartridge
         }
     }
+    
+    
+    // MARK: - Connecting to the outputs of the hardware
+    
+    public weak var videoReceiver: VideoReceiver? {
+        didSet {
+            ppu.videoReceiver = videoReceiver
+        }
+    }
+    
+    public weak var audioReceiver: AudioReceiver?
     
     
     // MARK: - Updating the hardware
@@ -101,6 +115,9 @@ public final class NES {
     public func reset() {
         clockCount = 0
         residualTime = 0.0
+        
+        let videoOutputParams = VideoOutputParameters(resolution: (width: 256, height: 240))
+        videoReceiver?.setVideoOutputParameters(videoOutputParams)
         
         cpu.reset()
     }
