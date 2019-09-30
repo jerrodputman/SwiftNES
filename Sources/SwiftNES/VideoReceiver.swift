@@ -23,7 +23,7 @@
 import Foundation
 
 public struct VideoOutputParameters {
-    let resolution: (width: UInt, height: UInt)
+    public let resolution: (width: UInt, height: UInt)
 }
 
 public protocol VideoReceiver: class {
