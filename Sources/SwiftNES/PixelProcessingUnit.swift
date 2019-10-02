@@ -46,11 +46,11 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         isFrameComplete = false
         cycle = Self.cycleRange.index(after: cycle)
         
-        if Self.cycleRange.contains(cycle) {
+        if !Self.cycleRange.contains(cycle) {
             cycle = Self.cycleRange.lowerBound
             scanline = Self.scanlineRange.index(after: scanline)
             
-            if Self.scanlineRange.contains(scanline) {
+            if !Self.scanlineRange.contains(scanline) {
                 scanline = Self.scanlineRange.lowerBound
                 isFrameComplete = true
             }
