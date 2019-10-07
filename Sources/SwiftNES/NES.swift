@@ -30,7 +30,9 @@ public final class NES {
     /// Creates a virtual NES.
     public init() {
         ppuCartridgeConnector = CartridgeConnector(addressRange: 0x0000...0x1fff)
-        let ppuBus = Bus(addressableDevices: [ppuCartridgeConnector])
+        nameTable = try! RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x2000...0x3eff)
+        palette = try! RandomAccessMemoryDevice(memorySize: 0x20, addressRange: 0x3f00...0x3fff)
+        let ppuBus = Bus(addressableDevices: [ppuCartridgeConnector, nameTable, palette])
         ppu = PixelProcessingUnit(bus: ppuBus)
         
         ram = try! RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x0000...0x1fff)
@@ -57,6 +59,12 @@ public final class NES {
     /// Connects a cartridge to the PPU bus.
     let ppuCartridgeConnector: CartridgeConnector
 
+    /// The background "name table" memory.
+    let nameTable: RandomAccessMemoryDevice
+    
+    /// The palette memory.
+    let palette: RandomAccessMemoryDevice
+    
     
     // MARK: - Connecting to the inputs of the hardware
     
@@ -65,6 +73,7 @@ public final class NES {
         didSet {
             cpuCartridgeConnector.cartridge = cartridge
             ppuCartridgeConnector.cartridge = cartridge
+            ppu.mirroringMode = cartridge?.mirroringMode ?? .horizontal
         }
     }
     
@@ -138,6 +147,10 @@ public final class NES {
         
         if clockCount % 3 == 0 {
             cpu.clock()
+        }
+        
+        if ppu.nmi {
+            cpu.nmi()
         }
         
         clockCount += 1

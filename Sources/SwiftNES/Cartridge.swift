@@ -23,7 +23,7 @@
 import Foundation
 
 /// An enumeration that defines the types of errors a cartridge can throw.
-enum CartridgeError: Error {
+public enum CartridgeError: Error {
     /// The data was not in the `iNES` format.
     case invalidDataFormat
     
@@ -44,7 +44,7 @@ public final class Cartridge {
     /// - parameter programStartAddress: Forces the starting address to a specified value.
     ///     This is typically only used for testing purposes, as all cartridges should have their program start
     ///     address set.
-    init(data: Data, programStartAddress: Address? = nil) throws {
+    public init(data: Data, programStartAddress: Address? = nil) throws {
         var dataLocation = 0
         
         // Read the 16-byte header.
@@ -88,6 +88,9 @@ public final class Cartridge {
         // Create and store the mapper.
         mapper = try mapperType.init(programMemoryBanks: programMemoryBanks, characterMemoryBanks: characterMemoryBanks)
         
+        // Determine the mirroring mode.
+        mirroringMode = (header.mapper1 & 0x01) > 0 ? .vertical : .horizontal
+        
         // If a program start address was specified, write it to the cartridge.
         if let programStartAddress = programStartAddress {
             write(UInt8(programStartAddress & 0x00ff), to: 0xfffc)
@@ -99,16 +102,27 @@ public final class Cartridge {
     ///
     /// - parameter string: A string containing program code. The program code must be compiled object
     /// code in hexadecimal format.
-    init(string: String) throws {
+    public init(string: String) throws {
         programMemory = [Value](repeating: 0, count: 0x4000)
         characterMemory = []
         mapper = try Self.mapperTypes[0]!.init(programMemoryBanks: 1, characterMemoryBanks: 1)
+        mirroringMode = .horizontal
         
         let programCode = string.hexToUInt8
         programMemory.replaceSubrange(0..<programCode.count, with: programCode)
         programMemory[0x3ffc] = 0x00
         programMemory[0x3ffd] = 0x80
     }
+    
+    
+    // MARK: - Accessing information about the cartridge
+    
+    enum MirroringMode {
+        case horizontal
+        case vertical
+    }
+    
+    let mirroringMode: MirroringMode
     
     
     // MARK: - Reading and writing

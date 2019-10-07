@@ -23,10 +23,10 @@
 import Foundation
 
 /// Represents an address within the addressable range of the NES.
-typealias Address = UInt16
+public typealias Address = UInt16
 
 /// A range within the complete addressable range of the NES.
-typealias AddressRange = CountableClosedRange<UInt16>
+public typealias AddressRange = CountableClosedRange<UInt16>
 
 /// The type of data that can be bussed around on the NES.
-typealias Value = UInt8
+public typealias Value = UInt8
