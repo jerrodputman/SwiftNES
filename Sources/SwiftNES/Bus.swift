@@ -31,7 +31,8 @@ final class Bus {
     ///
     /// - parameter addressableDevices: The devices that can be addressed via this bus.
     init(addressableDevices: [AddressableDevice]) {
-        self.addressableDevices = addressableDevices
+        self.addressableReadDevices = addressableDevices.compactMap { $0 as? AddressableReadDevice }
+        self.addressableWriteDevices = addressableDevices.compactMap { $0 as? AddressableWriteDevice }
     }
     
     
@@ -44,9 +45,8 @@ final class Bus {
     /// - parameter address: The address to read from.
     /// - returns: The value that was read from a device on the bus.
     func read(from address: Address) -> Value {
-        guard let deviceToReadFrom = addressableDevices
-            .first(where: { $0.respondsTo(address) })
-            as? AddressableReadDevice else { return 0 }
+        guard let deviceToReadFrom = addressableReadDevices
+            .first(where: { $0.respondsTo(address) }) else { return 0 }
         
         return deviceToReadFrom.read(from: address)
     }
@@ -58,9 +58,8 @@ final class Bus {
     /// - parameter value: The value to write to the bus.
     /// - parameter address: The address to write to.
     func write(_ value: Value, to address: Address) {
-        guard let deviceToWriteTo = addressableDevices
-            .first(where: { $0.respondsTo(address) })
-            as? AddressableWriteDevice else { return }
+        guard let deviceToWriteTo = addressableWriteDevices
+            .first(where: { $0.respondsTo(address) }) else { return }
 
         deviceToWriteTo.write(value, to: address)
     }
@@ -69,5 +68,6 @@ final class Bus {
     // MARK: - Private
 
     /// All attached devices on the bus.
-    private let addressableDevices: [AddressableDevice]
+    private let addressableReadDevices: [AddressableReadDevice]
+    private let addressableWriteDevices: [AddressableWriteDevice]
 }
