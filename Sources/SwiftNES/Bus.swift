@@ -27,47 +27,65 @@ final class Bus {
     
     // MARK: - Initializers
     
-    /// Creates a bus with attached devices.
+    /// Initializes a bus with attached devices.
     ///
-    /// - parameter addressableDevices: The devices that can be addressed via this bus.
+    /// - Parameters:
+    ///     - addressableDevices: The devices that can be addressed via this bus.
     init(addressableDevices: [AddressableDevice]) {
         self.addressableDevices = addressableDevices
+        
+        self.addressableReadDevicesIndexSet = addressableDevices
+            .enumerated()
+            .compactMap { $1 as? AddressableReadDevice != nil ? $0 : nil }
+            .reduce(into: IndexSet()) { $0.insert($1) }
+        self.addressableWriteDevicesIndexSet = addressableDevices
+            .enumerated()
+            .compactMap { $1 as? AddressableReadDevice != nil ? $0 : nil }
+            .reduce(into: IndexSet()) { $0.insert($1) }
     }
     
     
     // MARK: - Reading and writing
     
-    /// Reads data from a device on the bus.
+    /// Reads data from the specified address on the bus.
     ///
-    /// - note: If a device does not respond to the address, `0` will be returned.
+    /// - Note: If a device does not respond to the address, `0` will be returned.
     ///
-    /// - parameter address: The address to read from.
-    /// - returns: The value that was read from a device on the bus.
+    /// - Parameters:
+    ///     - address: The address to read from.
+    /// - Returns: The value that was read from a device on the bus.
     func read(from address: Address) -> Value {
-        guard let deviceToReadFrom = addressableDevices
-            .first(where: { $0.respondsTo(address) })
-            as? AddressableReadDevice else { return 0 }
+        let deviceToReadFrom = addressableReadDevicesIndexSet
+            .map { addressableDevices[$0] }
+            .first(where: { $0.respondsTo(address) }) as? AddressableReadDevice
         
-        return deviceToReadFrom.read(from: address)
+        return deviceToReadFrom?.read(from: address) ?? 0
     }
-    
-    /// Writes data to a device on the bus.
-    ///
-    /// - note: If a device does not respond to the address, this method does nothing.
-    ///
-    /// - parameter value: The value to write to the bus.
-    /// - parameter address: The address to write to.
-    func write(_ value: Value, to address: Address) {
-        guard let deviceToWriteTo = addressableDevices
-            .first(where: { $0.respondsTo(address) })
-            as? AddressableWriteDevice else { return }
 
-        deviceToWriteTo.write(value, to: address)
+    /// Writes data to the specified address on the bus.
+    ///
+    /// - Note: If a device does not respond to the address, this method does nothing.
+    ///
+    /// - Parameters:
+    ///     - value: The value to write to the bus.
+    ///     - address: The address to write to.
+    func write(_ value: Value, to address: Address) {
+        let deviceToWriteTo = addressableWriteDevicesIndexSet
+            .map { addressableDevices[$0] }
+            .first(where: { $0.respondsTo(address) }) as? AddressableWriteDevice
+        
+        deviceToWriteTo?.write(value, to: address)
     }
-    
-    
+
+
     // MARK: - Private
 
-    /// All attached devices on the bus.
+    /// All of the addressable devices attached to the bus.
     private let addressableDevices: [AddressableDevice]
+
+    /// A set of indices into the `addressableDevice` array where readable devices can be found.
+    private let addressableReadDevicesIndexSet: IndexSet
+
+    /// A set of indices into the `addressableDevice` array where writeable devices can be found.
+    private let addressableWriteDevicesIndexSet: IndexSet
 }

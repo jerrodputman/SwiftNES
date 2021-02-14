@@ -81,9 +81,8 @@ public final class NES {
     // MARK: - Connecting to the outputs of the hardware
     
     public weak var videoReceiver: VideoReceiver? {
-        didSet {
-            ppu.videoReceiver = videoReceiver
-        }
+        get { ppu.videoReceiver }
+        set { ppu.videoReceiver = newValue }
     }
     
     public weak var audioReceiver: AudioReceiver?
