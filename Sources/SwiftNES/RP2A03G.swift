@@ -22,28 +22,28 @@
 
 import Foundation
 
-/// Represents an address within the addressable range of the NES.
-public typealias Address = UInt16
-
-/// A range within the complete addressable range of the NES.
-public typealias AddressRange = CountableClosedRange<UInt16>
-
-/// The type of data that can be bussed around on the NES.
-public typealias Value = UInt8
-
-
-extension Address {
-    init(lo: UInt8, hi: UInt8) {
-        self = (UInt16(hi) << 8) | UInt16(lo)
+final class RP2A03G {
+    
+    // MARK: - Initializers
+    
+    /// Creates a virtual CPU with the specified bus.
+    ///
+    /// - parameter bus: The bus that the CPU should use to communicate with other devices.
+    init(bus: Bus) {
+        // TODO: Create the APU and connect it to the bus.
+        // TODO: Create the DMA controller and connect it to the bus.
+        self.core = MOS6502(bus: bus)
     }
     
-    var lo: Value { Value(self & 0x00ff) }
     
-    var hi: Value { Value((self >> 8) & 0x00ff) }
+    // MARK: - Hardware
     
-    func mirrored(after logicalEnd: UInt16, within range: AddressRange) -> Address? {
-        guard range.contains(self) else { return nil }
-        
-        return range.lowerBound + (self & logicalEnd)
-    }
+    /// The 6502 core of the 2A03.
+    let core: MOS6502
+    
+    //let apu: AudioProcessingUnit
+    
+    //var controlPad1: ControlPad?
+    
+    //var controlPad2: ControlPad?
 }

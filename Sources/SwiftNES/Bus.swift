@@ -37,6 +37,15 @@ final class Bus {
     
     // MARK: - Reading and writing
     
+    /// Read from or write to an address on the bus.
+    ///
+    /// - parameter address: The address to read/write from.
+    /// - returns: The value that was read from a device on the bus.
+    subscript(address: Address) -> Value {
+        get { read(from: address) }
+        set { write(newValue, to: address) }
+    }
+    
     /// Reads data from a device on the bus.
     ///
     /// - note: If a device does not respond to the address, `0` will be returned.

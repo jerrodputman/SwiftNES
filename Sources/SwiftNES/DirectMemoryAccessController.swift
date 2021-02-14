@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2019 Jerrod Putman
+// Copyright (c) 2020 Jerrod Putman
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,28 +22,18 @@
 
 import Foundation
 
-/// Represents an address within the addressable range of the NES.
-public typealias Address = UInt16
+struct ObjectAttributeEntry {
+    var y: UInt8
+    var id: UInt8
+    var attribute: UInt8
+    var x: UInt8
+}
 
-/// A range within the complete addressable range of the NES.
-public typealias AddressRange = CountableClosedRange<UInt16>
+var objectAttributeMemory: [ObjectAttributeEntry] = []
 
-/// The type of data that can be bussed around on the NES.
-public typealias Value = UInt8
-
-
-extension Address {
-    init(lo: UInt8, hi: UInt8) {
-        self = (UInt16(hi) << 8) | UInt16(lo)
-    }
+final class DirectMemoryAccessController {
     
-    var lo: Value { Value(self & 0x00ff) }
-    
-    var hi: Value { Value((self >> 8) & 0x00ff) }
-    
-    func mirrored(after logicalEnd: UInt16, within range: AddressRange) -> Address? {
-        guard range.contains(self) else { return nil }
-        
-        return range.lowerBound + (self & logicalEnd)
-    }
+    private var page: UInt8
+    private var address: UInt8
+    private var data: Value 
 }
