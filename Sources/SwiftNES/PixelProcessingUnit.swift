@@ -22,10 +22,14 @@
 
 import Foundation
 
+/// A class that emulates the behavior of the 2C02 pixel processing unit.
 final class PixelProcessingUnit: AddressableReadWriteDevice {
     
     // MARK: - Initializers
     
+    /// Creates a virtual PPU with the specified bus.
+    ///
+    /// - parameter bus: The bus that the PPU should use to communicate with other devices.
     init(bus: Bus) {
         self.bus = bus
     }
@@ -33,6 +37,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     
     // MARK: - Registers
     
+    /// An option set for the graphics control register.
     struct Control: OptionSet {
         var rawValue: Value
         
@@ -46,6 +51,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         static let enableNmi = Control(rawValue: (1 << 7))
     }
     
+    /// An option set for the status report register.
     struct Status: OptionSet {
         var rawValue: Value
         
@@ -54,6 +60,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         static let verticalBlank = Status(rawValue: (1 << 7))
     }
     
+    /// An option set for the mask register.
     struct Mask: OptionSet {
         var rawValue: Value
         
@@ -67,12 +74,20 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         static let enhanceBlue = Mask(rawValue: (1 << 7))
     }
     
+    
+    /// The graphics control register.
     private(set) var control: Control = Control(rawValue: 0)
+    
+    /// The status report register.
     private(set) var status: Status = Status(rawValue: 0)
+    
+    /// The mask register.
     private(set) var mask: Mask = Mask(rawValue: 0)
+    
     
     var mirroringMode: Cartridge.MirroringMode = .horizontal
 
+    /// Whether or not the non-maskable interrupt is triggered.
     var nmi: Bool {
         get {
             defer { _nmi = false }
@@ -88,15 +103,18 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     
     // MARK: - Outputting video
     
+    /// The receiver of the video output.
     weak var videoReceiver: VideoReceiver?
     
     
     // MARK: - External events
     
+    /// Performs a single cycle of work on the PPU.
     func clock() {
 
         func incrementScrollX() {
-            guard mask.contains(.renderBackground) || mask.contains(.renderSprites) else { return }
+            guard mask.contains(.renderBackground)
+                || mask.contains(.renderSprites) else { return }
             
             if vramAddress.coarseX == 31 {
                 vramAddress.coarseX = 0
@@ -107,7 +125,8 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         }
         
         func incrementScrollY() {
-            guard mask.contains(.renderBackground) || mask.contains(.renderSprites) else { return }
+            guard mask.contains(.renderBackground)
+                || mask.contains(.renderSprites) else { return }
             
             if vramAddress.fineY < 7 {
                 vramAddress.fineY += 1
@@ -155,18 +174,26 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
             bgShiftAttributeHi <<= 1
         }
         
-        switch scanline {
-        case -1..<240:
-            if scanline == 0 && cycle == 0 {
-                cycle = 1
-            }
-            
-            if scanline == -1 && cycle == 1 {
-                // This is the start of a new frame, so clear the vertical blank flag.
-                status.remove(.verticalBlank)
-            }
-            
-            if (cycle >= 2 && cycle < 258) || (cycle >= 321 && cycle < 338) {
+        if scanline == -1
+            && cycle == 1 {
+            // This is the start of a new frame, so clear the vertical blank flag.
+            status.remove(.verticalBlank)
+        }
+        
+        if scanline == -1
+            && cycle >= 280
+            && cycle < 305 {
+            transferAddressY()
+        }
+        
+        if scanline == 0
+            && cycle == 0 {
+            cycle = 1
+        }
+        
+        if (-1..<240).contains(scanline) {
+            if (2..<258).contains(cycle)
+                || (321..<338).contains(cycle) {
                 updateShifters()
                 
                 switch (cycle - 1) % 8 {
@@ -208,29 +235,22 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
                 transferAddressX()
             }
             
-            if cycle == 338 || cycle == 340 {
-                let address = 0x2000 | (vramAddress.rawValue & 0x0fff)
+            if cycle == 338
+                || cycle == 340 {
+                let address = Self.nametableAddressRange.lowerBound | (vramAddress.rawValue & 0x0fff)
                 bgNextTileId = bus.read(from: mirroredAddress(address))
             }
-            
-            if scanline == -1 && cycle >= 280 && cycle < 305 {
-                transferAddressY()
-            }
-            
-        case 241..<261:
-            if scanline == 241 && cycle == 1 {
-                status.insert(.verticalBlank)
-                
-                if control.contains(.enableNmi) {
-                    nmi = true
-                }
-            }
-            
-
-        default:
-            break
         }
         
+        if scanline == 241
+            && cycle == 1 {
+            status.insert(.verticalBlank)
+            
+            if control.contains(.enableNmi) {
+                nmi = true
+            }
+        }
+
         
         var bgPalette: UInt8 = 0
         var bgPixel: UInt8 = 0
@@ -247,7 +267,10 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
             bgPalette = (paletteHi << 1) | paletteLo
         }
         
-        videoReceiver?.setPixel(atX: Int(cycle - 1), y: Int(scanline), withColor: color(fromPalette: bgPalette, index: bgPixel).rawValue)
+        let bgColor = color(fromPalette: bgPalette, index: bgPixel)
+        videoReceiver?.setPixel(atX: Int(cycle - 1),
+                                y: Int(scanline),
+                                withColor: bgColor.rawValue)
         
         isFrameComplete = false
         cycle = Self.cycleRange.index(after: cycle)
@@ -263,27 +286,24 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         }
     }
     
+    /// Whether or not the current frame is complete.
     private(set) var isFrameComplete: Bool = false
     
     
     // MARK: - AddressableReadWriteDevice
     
     func respondsTo(_ address: Address) -> Bool {
-        return Self.addressRange.contains(address)
+        return RegisterAddress.range.contains(address)
     }
     
     func read(from address: Address) -> Value {
-        guard let addressIndex = Self.addressRange.firstIndex(of: address) else { return 0 }
-        
-        let distance = Self.addressRange.distance(from: Self.addressRange.startIndex, to: addressIndex)
-        
-        guard let register = Register(rawValue: distance) else { return 0 }
+        guard let register = RegisterAddress(address: address) else { return 0 }
         
         switch register {
-        case .control:
+        case .control, .mask, .oamAddress, .scroll, .ppuAddress:
+            // Cannot be read from.
             break
-        case .mask:
-            break
+
         case .status:
             // Only the first 3 bits are read from the `status` register, and the
             // remaining bits are filled with noise, likely from the last data
@@ -298,15 +318,10 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
             
             return data
             
-        case .oamAddress:
-            break
         case .oamData:
+            // TODO: Return OAM data at OAM address.
             break
-        case .scroll:
-            break
-        case .ppuAddress:
-            // Cannot be read from.
-            break
+
         case .ppuData:
             // Reading data from the PPU is delayed by one cycle.
             // Grab the previously stored value from the buffer and return it
@@ -315,7 +330,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
             ppuDataBuffer = bus.read(from: mirroredAddress(vramAddress.rawValue))
             
             // Except for palette data, which is returned immediately.
-            if (0x3f00...0x3fff).contains(vramAddress.rawValue) {
+            if Self.paletteAddressRange.contains(vramAddress.rawValue) {
                 data = ppuDataBuffer
             }
             
@@ -329,26 +344,29 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     }
     
     func write(_ value: Value, to address: Address) {
-        guard let addressIndex = Self.addressRange.firstIndex(of: address) else { return }
-
-        let distance = Self.addressRange.distance(from: Self.addressRange.startIndex, to: addressIndex)
-        
-        guard let register = Register(rawValue: distance) else { return }
+        guard let register = RegisterAddress(address: address) else { return }
         
         switch register {
         case .control:
             control.rawValue = value
             tramAddress.nametableX = control.contains(.nametableX) ? 1 : 0
             tramAddress.nametableY = control.contains(.nametableY) ? 1 : 0
+
         case .mask:
             mask.rawValue = value
+
         case .status:
             // Cannot be written to.
             break
+
         case .oamAddress:
+            // TODO: Write the OAM address.
             break
+            
         case .oamData:
+            // TODO: Set the data at the OAM address.
             break
+
         case .scroll:
             switch ppuAddressLatch {
             case .high:
@@ -360,7 +378,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
                 tramAddress.coarseY = UInt16(value) >> 3
                 ppuAddressLatch = .high
             }
-            break
+
         case .ppuAddress:
             switch ppuAddressLatch {
             case .high:
@@ -371,6 +389,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
                 vramAddress = tramAddress
                 ppuAddressLatch = .high
             }
+            
         case .ppuData:
             bus.write(value, to: mirroredAddress(vramAddress.rawValue))
             vramAddress.rawValue += control.contains(.yIncrementMode) ? 32 : 1
@@ -380,8 +399,9 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     
     // MARK: - Private
     
-    private enum Register: Int {
-        case control
+    /// An enumeration of the addresses of the PPU registers available on the CPU's bus.
+    private enum RegisterAddress: Address {
+        case control = 0x2000
         case mask
         case status
         case oamAddress
@@ -389,12 +409,38 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         case scroll
         case ppuAddress
         case ppuData
+        
+        
+        init?(address: Address) {
+            guard let mirroredAddress = address.mirrored(after: 0x7, within: Self.range),
+                let registerAddress = RegisterAddress(rawValue: mirroredAddress) else { return nil }
+            
+            self = registerAddress
+        }
+        
+        static let range: AddressRange = 0x2000...0x3fff
     }
     
+    /// The address range where nametable memory is located on the PPU's bus.
+    private static let nametableAddressRange: AddressRange = 0x2000...0x3eff
+    
+    /// The address range where palette memory is located on the PPU's bus.
+    private static let paletteAddressRange: AddressRange = 0x3f00...0x3fff
+    
+    /// The range of cycles per scanline.
+    private static let cycleRange: Range<Int16> = 0..<341
+    
+    /// The range of scanlines per frame.
+    private static let scanlineRange: Range<Int16> = -1..<261
+    
+    /// The PPU's bus.
     private let bus: Bus
     
-    private var cycle: Int16 = 0
+    /// The current scanline.
     private var scanline: Int16 = 0
+    
+    /// The current cycle of the current scanline.
+    private var cycle: Int16 = 0
     
     enum AddressLatch {
         case high
@@ -405,7 +451,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     private var ppuDataBuffer: Value = 0
     private var ppuAddress: Address = 0x0
     
-    private struct Loopy {
+    private struct ScrollRegister {
         var rawValue: Address
         
         var coarseX: UInt16 {
@@ -434,8 +480,8 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         }
     }
     
-    private var vramAddress: Loopy = Loopy(rawValue: 0)
-    private var tramAddress: Loopy = Loopy(rawValue: 0)
+    private var vramAddress: ScrollRegister = ScrollRegister(rawValue: 0)
+    private var tramAddress: ScrollRegister = ScrollRegister(rawValue: 0)
     private var fineX: UInt8 = 0
     
     private var bgNextTileId: UInt8 = 0
@@ -447,10 +493,6 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     private var bgShiftPatternHi: UInt16 = 0
     private var bgShiftAttributeLo: UInt16 = 0
     private var bgShiftAttributeHi: UInt16 = 0
-    
-    private static let addressRange: AddressRange = 0x2000...0x3fff
-    private static let cycleRange: Range<Int16> = 0..<341
-    private static let scanlineRange: Range<Int16> = -1..<261
     
     
     private func mirroredAddress(_ address: Address) -> Address {
@@ -519,7 +561,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     }
     
     private func color(fromPalette palette: UInt8, index: UInt8) -> Color {
-        let address = 0x3f00 + (UInt16(palette) << 2) + UInt16(index)
+        let address = Self.paletteAddressRange.lowerBound + (UInt16(palette) << 2) + UInt16(index)
         let colorIndex = Int(bus.read(from: mirroredAddress(address)) & 0x3f)
         
         return Self.colors[colorIndex]

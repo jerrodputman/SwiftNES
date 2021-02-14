@@ -54,3 +54,13 @@ extension String {
         return bytes
     }
 }
+
+extension OptionSet {
+    mutating func setOptions(_ options: Self, enabled: Bool) {
+        if enabled {
+            formUnion(options)
+        } else {
+            subtract(options)
+        }
+    }
+}
