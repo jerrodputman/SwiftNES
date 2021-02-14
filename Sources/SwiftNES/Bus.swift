@@ -31,7 +31,9 @@ final class Bus {
     ///
     /// - Parameters:
     ///     - addressableDevices: The devices that can be addressed via this bus.
-    init(addressableDevices: [AddressableDevice]) {
+    init(addressableDevices: [AddressableDevice]) throws {
+        // TODO: Verify that there are no overlapping devices.
+        
         self.addressableDevices = addressableDevices
         
         self.addressableReadDevicesIndexSet = addressableDevices
@@ -49,8 +51,9 @@ final class Bus {
     
     /// Read from or write to an address on the bus.
     ///
-    /// - parameter address: The address to read/write from.
-    /// - returns: The value that was read from a device on the bus.
+    /// - Parameters:
+    ///     - address: The address to read from or write to..
+    /// - Returns: The value that was read from a device on the bus.
     subscript(address: Address) -> Value {
         get { read(from: address) }
         set { write(newValue, to: address) }

@@ -4,8 +4,8 @@ import XCTest
 final class SwiftNESTests: XCTestCase {
     var nes: NES!
     
-    override func setUp() {
-        nes = NES()
+    override func setUpWithError() throws {
+        nes = try NES()
     }
     
     func testMultiply10By3() throws {
@@ -35,28 +35,28 @@ final class SwiftNESTests: XCTestCase {
         nes.cartridge = cartridge
         XCTAssertNotNil(nes.cartridge, "Cartridge not inserted")
         
-        nes.cpu.reset()
-        XCTAssert(nes.cpu.pc == 0x8000, "Reset did not place program counter to 0x8000")
+        nes.cpu.core.reset()
+        XCTAssert(nes.cpu.core.pc == 0x8000, "Reset did not place program counter to 0x8000")
         
-        while nes.cpu.pc < 0x8000 + program.hexToUInt8.count {
-            nes.cpu.clock()
+        while nes.cpu.core.pc < 0x8000 + program.hexToUInt8.count {
+            nes.cpu.core.clock()
         }
         
         XCTAssert(nes.ram[0x0000] == UInt8(10), "Value stored at 0x0000 was not 10")
         XCTAssert(nes.ram[0x0001] == UInt8(3), "Value stored at 0x0001 was not 3")
         XCTAssert(nes.ram[0x0002] == UInt8(30), "Result stored at 0x0002 was not 30")
-        XCTAssert(nes.cpu.status.contains(.unused), "Status register did not contain U flag.")
-        XCTAssert(nes.cpu.status.contains(.resultIsZero), "Status register did not contain Z flag")
-        XCTAssert(!nes.cpu.status.contains(.carry), "Status register contains C flag")
-        XCTAssert(!nes.cpu.status.contains(.disableInterrupts), "Status register contains I flag")
-        XCTAssert(!nes.cpu.status.contains(.decimalMode), "Status register contains D flag")
-        XCTAssert(!nes.cpu.status.contains(.break), "Status register contains B flag")
-        XCTAssert(!nes.cpu.status.contains(.resultIsOverflowed), "Status register contains V flag")
-        XCTAssert(!nes.cpu.status.contains(.resultIsNegative), "Status register contains N flag")
-        XCTAssert(nes.cpu.totalCycleCount == 126, "Incorrect cycle count")
+        XCTAssert(nes.cpu.core.status.contains(.unused), "Status register did not contain U flag.")
+        XCTAssert(nes.cpu.core.status.contains(.resultIsZero), "Status register did not contain Z flag")
+        XCTAssert(!nes.cpu.core.status.contains(.carry), "Status register contains C flag")
+        XCTAssert(!nes.cpu.core.status.contains(.disableInterrupts), "Status register contains I flag")
+        XCTAssert(!nes.cpu.core.status.contains(.decimalMode), "Status register contains D flag")
+        XCTAssert(!nes.cpu.core.status.contains(.break), "Status register contains B flag")
+        XCTAssert(!nes.cpu.core.status.contains(.resultIsOverflowed), "Status register contains V flag")
+        XCTAssert(!nes.cpu.core.status.contains(.resultIsNegative), "Status register contains N flag")
+        XCTAssert(nes.cpu.core.totalCycleCount == 126, "Incorrect cycle count")
         
         print("Disassembly:")
-        let disassembly = nes.cpu.disassemble(start: 0x8000, stop: 0x8000 + Address(program.hexToUInt8.count))
+        let disassembly = nes.cpu.core.disassemble(start: 0x8000, stop: 0x8000 + Address(program.hexToUInt8.count))
         for key in disassembly.keys.sorted() {
             guard let line = disassembly[key] else { continue }
             print(line)

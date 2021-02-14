@@ -33,7 +33,13 @@ var objectAttributeMemory: [ObjectAttributeEntry] = []
 
 final class DirectMemoryAccessController {
     
+    init() {
+        page = 0
+        address = 0
+        data = 0
+    }
+    
     private var page: UInt8
     private var address: UInt8
-    private var data: Value 
+    private var data: Value
 }

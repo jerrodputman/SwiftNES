@@ -23,9 +23,9 @@ final class BusTests: XCTestCase {
         
     }
     
-    func testReadPerformance() {
+    func testReadPerformance() throws {
         let devices = Array(repeating: MockDevice(), count: 20)
-        let bus = Bus(addressableDevices: devices)
+        let bus = try Bus(addressableDevices: devices)
         let addresses: [Address] = (0..<10000).map { _ in Address.random(in: 0x0000...0xffff) }
         
         measure {
@@ -36,9 +36,9 @@ final class BusTests: XCTestCase {
         }
     }
     
-    func testWritePerformance() {
+    func testWritePerformance() throws {
         let devices = Array(repeating: MockDevice(), count: 20)
-        let bus = Bus(addressableDevices: devices)
+        let bus = try Bus(addressableDevices: devices)
         let addresses: [Address] = (0..<10000).map { _ in Address.random(in: 0x0000...0xffff) }
 
         measure {

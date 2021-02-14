@@ -28,16 +28,16 @@ public final class NES {
     // MARK: - Initializers
 
     /// Creates a virtual NES.
-    public init() {
+    public init() throws {
         ppuCartridgeConnector = CartridgeConnector(addressRange: 0x0000...0x1fff)
-        nameTable = try! RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x2000...0x3eff)
-        palette = try! RandomAccessMemoryDevice(memorySize: 0x20, addressRange: 0x3f00...0x3fff)
-        let ppuBus = Bus(addressableDevices: [ppuCartridgeConnector, nameTable, palette])
+        nameTable = try RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x2000...0x3eff)
+        palette = try RandomAccessMemoryDevice(memorySize: 0x20, addressRange: 0x3f00...0x3fff)
+        let ppuBus = try Bus(addressableDevices: [ppuCartridgeConnector, nameTable, palette])
         ppu = PixelProcessingUnit(bus: ppuBus)
         
         ram = try! RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x0000...0x1fff)
         cpuCartridgeConnector = CartridgeConnector(addressRange: 0x8000...0xffff)
-        let cpuBus = Bus(addressableDevices: [ram, ppu, cpuCartridgeConnector])
+        let cpuBus = try Bus(addressableDevices: [ram, ppu, cpuCartridgeConnector])
         cpu = RP2A03G(bus: cpuBus)
     }
 
