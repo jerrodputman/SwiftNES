@@ -26,7 +26,7 @@ public struct VideoOutputParameters {
     public let resolution: (width: UInt, height: UInt)
 }
 
-public protocol VideoReceiver: class {
+public protocol VideoReceiver: AnyObject {
     func setVideoOutputParameters(_ params: VideoOutputParameters)
     func setPixel(atX x: Int, y: Int, withColor color: UInt32)
     // TODO: Move protocol into an SDK package.

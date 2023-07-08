@@ -23,13 +23,15 @@
 import Foundation
 
 /// A protocol that describes a device that is addressable on a system bus.
-protocol AddressableDevice: class {
+protocol AddressableDevice: AnyObject {
     /// Returns whether or not the device responds to the specified address.
     ///
     /// - Parameters:
     ///     - address: The address.
     /// - Returns: Whether or not the device responds to the address.
     func respondsTo(_ address: Address) -> Bool
+    
+    var addressRange: AddressRange { get }
 }
 
 /// A protocol that describes a device that is addressable on a system bus and can be read from.

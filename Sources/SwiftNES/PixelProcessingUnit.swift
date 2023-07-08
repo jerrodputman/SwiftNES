@@ -292,9 +292,12 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     
     // MARK: - AddressableReadWriteDevice
     
+    @inlinable
     func respondsTo(_ address: Address) -> Bool {
-        return RegisterAddress.range.contains(address)
+        RegisterAddress.range.contains(address)
     }
+    
+    let addressRange: AddressRange = RegisterAddress.range
     
     func read(from address: Address) -> Value {
         guard let register = RegisterAddress(address: address) else { return 0 }

@@ -31,19 +31,16 @@ final class Bus {
     ///
     /// - Parameters:
     ///     - addressableDevices: The devices that can be addressed via this bus.
-    init(addressableDevices: [AddressableDevice]) throws {
+    init(addressableDevices: [any AddressableDevice]) throws {
         // TODO: Verify that there are no overlapping devices.
         
-        self.addressableDevices = addressableDevices
+        let addressableReadDevices = addressableDevices.compactMap { $0 as? AddressableReadDevice }
+        let addressableWriteDevices = addressableDevices.compactMap { $0 as? AddressableWriteDevice }
         
-        self.addressableReadDevicesIndexSet = addressableDevices
-            .enumerated()
-            .compactMap { $1 as? AddressableReadDevice != nil ? $0 : nil }
-            .reduce(into: IndexSet()) { $0.insert($1) }
-        self.addressableWriteDevicesIndexSet = addressableDevices
-            .enumerated()
-            .compactMap { $1 as? AddressableReadDevice != nil ? $0 : nil }
-            .reduce(into: IndexSet()) { $0.insert($1) }
+        self.addressableReadDeviceRanges = addressableReadDevices.map(\.addressRange)
+        self.addressableWriteDeviceRanges = addressableWriteDevices.map(\.addressRange)
+        self.addressableReadDevices = addressableReadDevices
+        self.addressableWriteDevices = addressableWriteDevices
     }
     
     
@@ -67,11 +64,12 @@ final class Bus {
     ///     - address: The address to read from.
     /// - Returns: The value that was read from a device on the bus.
     func read(from address: Address) -> Value {
-        let deviceToReadFrom = addressableReadDevicesIndexSet
-            .map { addressableDevices[$0] }
-            .first(where: { $0.respondsTo(address) }) as? AddressableReadDevice
+        guard let deviceToReadFromIndex = addressableReadDeviceRanges
+            .firstIndex(where: { $0.contains(address) }) else { return 0 }
         
-        return deviceToReadFrom?.read(from: address) ?? 0
+        let deviceToReadFrom = addressableReadDevices[deviceToReadFromIndex]
+        
+        return deviceToReadFrom.read(from: address)
     }
 
     /// Writes data to the specified address on the bus.
@@ -82,22 +80,24 @@ final class Bus {
     ///     - value: The value to write to the bus.
     ///     - address: The address to write to.
     func write(_ value: Value, to address: Address) {
-        let deviceToWriteTo = addressableWriteDevicesIndexSet
-            .map { addressableDevices[$0] }
-            .first(where: { $0.respondsTo(address) }) as? AddressableWriteDevice
+        guard let deviceToWriteToIndex = addressableWriteDeviceRanges
+            .firstIndex(where: { $0.contains(address) }) else { return }
         
-        deviceToWriteTo?.write(value, to: address)
+        let deviceToWriteTo = addressableWriteDevices[deviceToWriteToIndex]
+        
+        deviceToWriteTo.write(value, to: address)
     }
 
 
     // MARK: - Private
 
-    /// All of the addressable devices attached to the bus.
-    private let addressableDevices: [AddressableDevice]
+    /// The ranges 
+    private let addressableReadDeviceRanges: [AddressRange]
+    private let addressableWriteDeviceRanges: [AddressRange]
+    
+    /// All of the addressable devices attached to the bus that can be read from.
+    private let addressableReadDevices: [any AddressableReadDevice]
 
-    /// A set of indices into the `addressableDevice` array where readable devices can be found.
-    private let addressableReadDevicesIndexSet: IndexSet
-
-    /// A set of indices into the `addressableDevice` array where writeable devices can be found.
-    private let addressableWriteDevicesIndexSet: IndexSet
+    /// All of the addressable devices attached to the bus that can be written to.
+    private let addressableWriteDevices: [any AddressableWriteDevice]
 }

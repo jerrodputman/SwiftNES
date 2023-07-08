@@ -22,7 +22,7 @@
 
 import Foundation
 
-public protocol AudioReceiver: class {
+public protocol AudioReceiver: AnyObject {
     // TODO: Define an AudioReceiver.
     // TODO: Move protocol into an SDK package.
 }

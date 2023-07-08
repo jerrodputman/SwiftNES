@@ -62,9 +62,13 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
     
     // MARK: - Accessing the device
     
+    @inlinable
     func respondsTo(_ address: Address) -> Bool {
         addressRange.contains(address)
     }
+    
+    /// The range of addresses that the device responds to.
+    let addressRange: AddressRange
     
     func read(from address: Address) -> Value {
         guard let addressIndex = addressRange.firstIndex(of: address) else { return 0 }
@@ -82,9 +86,6 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
     
     
     // MARK: - Private
-    
-    /// The range of addresses that the device responds to.
-    fileprivate let addressRange: AddressRange
     
     /// The memory of the device.
     fileprivate var memory: [Value]

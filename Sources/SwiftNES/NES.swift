@@ -80,12 +80,12 @@ public final class NES {
     
     // MARK: - Connecting to the outputs of the hardware
     
-    public weak var videoReceiver: VideoReceiver? {
+    public weak var videoReceiver: (any VideoReceiver)? {
         get { ppu.videoReceiver }
         set { ppu.videoReceiver = newValue }
     }
     
-    public weak var audioReceiver: AudioReceiver?
+    public weak var audioReceiver: (any AudioReceiver)?
     
     
     // MARK: - Updating the hardware
@@ -134,7 +134,7 @@ public final class NES {
     // MARK: - Private
     
     /// The total clock count since the hardware was reset.
-    private var clockCount: UInt32 = 0
+    private var clockCount: UInt = 0
     
     /// The remaining residual time since the last update.
     private var residualTime: TimeInterval = 0
@@ -152,6 +152,6 @@ public final class NES {
             cpu.core.nmi()
         }
         
-        clockCount += 1
+        clockCount &+= 1
     }
 }

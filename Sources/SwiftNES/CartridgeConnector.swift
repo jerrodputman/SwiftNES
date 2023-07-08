@@ -46,10 +46,14 @@ final class CartridgeConnector: AddressableReadWriteDevice {
     
     // MARK: - AddressableReadWriteDevice
     
+    @inlinable
     func respondsTo(_ address: Address) -> Bool {
-        return addressRange.contains(address)
+        addressRange.contains(address)
     }
     
+    /// The range of addresses that this connector responds to.
+    let addressRange: AddressRange
+
     func read(from address: Address) -> Value {
         guard respondsTo(address) else { return 0 }
         
@@ -61,10 +65,4 @@ final class CartridgeConnector: AddressableReadWriteDevice {
         
         cartridge?.write(value, to: address)
     }
-    
-    
-    // MARK: - Private
-    
-    /// The range of addresses that this connector responds to.
-    private let addressRange: AddressRange
 }
