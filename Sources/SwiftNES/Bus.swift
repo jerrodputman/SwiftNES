@@ -27,47 +27,79 @@ final class Bus {
     
     // MARK: - Initializers
     
-    /// Creates a bus with attached devices.
+    /// Initializes a bus with attached devices.
     ///
-    /// - parameter addressableDevices: The devices that can be addressed via this bus.
-    init(addressableDevices: [AddressableDevice]) {
-        self.addressableReadDevices = addressableDevices.compactMap { $0 as? AddressableReadDevice }
-        self.addressableWriteDevices = addressableDevices.compactMap { $0 as? AddressableWriteDevice }
+    /// - Parameters:
+    ///     - addressableDevices: The devices that can be addressed via this bus.
+    init(addressableDevices: [any AddressableDevice]) throws {
+        // TODO: Verify that there are no overlapping devices.
+        
+        let addressableReadDevices = addressableDevices.compactMap { $0 as? AddressableReadDevice }
+        let addressableWriteDevices = addressableDevices.compactMap { $0 as? AddressableWriteDevice }
+        
+        self.addressableReadDeviceRanges = addressableReadDevices.map(\.addressRange)
+        self.addressableWriteDeviceRanges = addressableWriteDevices.map(\.addressRange)
+        self.addressableReadDevices = addressableReadDevices
+        self.addressableWriteDevices = addressableWriteDevices
     }
     
     
     // MARK: - Reading and writing
     
-    /// Reads data from a device on the bus.
+    /// Read from or write to an address on the bus.
     ///
-    /// - note: If a device does not respond to the address, `0` will be returned.
+    /// - Parameters:
+    ///     - address: The address to read from or write to..
+    /// - Returns: The value that was read from a device on the bus.
+    subscript(address: Address) -> Value {
+        get { read(from: address) }
+        set { write(newValue, to: address) }
+    }
+    
+    /// Reads data from the specified address on the bus.
     ///
-    /// - parameter address: The address to read from.
-    /// - returns: The value that was read from a device on the bus.
+    /// - Note: If a device does not respond to the address, `0` will be returned.
+    ///
+    /// - Parameters:
+    ///     - address: The address to read from.
+    /// - Returns: The value that was read from a device on the bus.
     func read(from address: Address) -> Value {
-        guard let deviceToReadFrom = addressableReadDevices
-            .first(where: { $0.respondsTo(address) }) else { return 0 }
+        guard let deviceToReadFromIndex = addressableReadDeviceRanges
+            .firstIndex(where: { $0.contains(address) }) else { return 0 }
+        
+        let deviceToReadFrom = addressableReadDevices[deviceToReadFromIndex]
         
         return deviceToReadFrom.read(from: address)
     }
-    
-    /// Writes data to a device on the bus.
-    ///
-    /// - note: If a device does not respond to the address, this method does nothing.
-    ///
-    /// - parameter value: The value to write to the bus.
-    /// - parameter address: The address to write to.
-    func write(_ value: Value, to address: Address) {
-        guard let deviceToWriteTo = addressableWriteDevices
-            .first(where: { $0.respondsTo(address) }) else { return }
 
+    /// Writes data to the specified address on the bus.
+    ///
+    /// - Note: If a device does not respond to the address, this method does nothing.
+    ///
+    /// - Parameters:
+    ///     - value: The value to write to the bus.
+    ///     - address: The address to write to.
+    func write(_ value: Value, to address: Address) {
+        guard let deviceToWriteToIndex = addressableWriteDeviceRanges
+            .firstIndex(where: { $0.contains(address) }) else { return }
+        
+        let deviceToWriteTo = addressableWriteDevices[deviceToWriteToIndex]
+        
         deviceToWriteTo.write(value, to: address)
     }
-    
-    
+
+
     // MARK: - Private
 
-    /// All attached devices on the bus.
-    private let addressableReadDevices: [AddressableReadDevice]
-    private let addressableWriteDevices: [AddressableWriteDevice]
+    /// The ranges of the addressable devices attached to the bus that can be read from.
+    private let addressableReadDeviceRanges: [AddressRange]
+  
+    /// The ranges of the addressable devices attached to the bus that can be written to.
+    private let addressableWriteDeviceRanges: [AddressRange]
+    
+    /// All of the addressable devices attached to the bus that can be read from.
+    private let addressableReadDevices: [any AddressableReadDevice]
+
+    /// All of the addressable devices attached to the bus that can be written to.
+    private let addressableWriteDevices: [any AddressableWriteDevice]
 }

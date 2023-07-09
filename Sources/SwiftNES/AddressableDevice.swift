@@ -23,20 +23,24 @@
 import Foundation
 
 /// A protocol that describes a device that is addressable on a system bus.
-protocol AddressableDevice: class {
+protocol AddressableDevice: AnyObject {
     /// Returns whether or not the device responds to the specified address.
     ///
-    /// - parameter address: The address.
-    /// - returns: Whether or not the device responds to the address.
+    /// - Parameters:
+    ///     - address: The address.
+    /// - Returns: Whether or not the device responds to the address.
     func respondsTo(_ address: Address) -> Bool
+    
+    var addressRange: AddressRange { get }
 }
 
 /// A protocol that describes a device that is addressable on a system bus and can be read from.
 protocol AddressableReadDevice: AddressableDevice {
     /// Reads from the addressable device at the specified address.
     ///
-    /// - parameter address: The address to read from.
-    /// - returns: The value stored at the address.
+    /// - Parameters:
+    ///     - address: The address to read from.
+    /// - Returns: The value stored at the address.
     func read(from address: Address) -> Value
 }
 
@@ -44,8 +48,9 @@ protocol AddressableReadDevice: AddressableDevice {
 protocol AddressableWriteDevice: AddressableDevice {
     /// Writes data to the addressable device at the specified address.
     ///
-    /// - parameter data: The data to be written.
-    /// - parameter address: The address to write to.
+    /// - Parameters:
+    ///     - data: The data to be written.
+    ///     - address: The address to write to.
     func write(_ data: Value, to address: Address)
 }
 

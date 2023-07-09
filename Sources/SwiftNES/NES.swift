@@ -28,22 +28,24 @@ public final class NES {
     // MARK: - Initializers
 
     /// Creates a virtual NES.
-    public init() {
+    public init() throws {
         ppuCartridgeConnector = CartridgeConnector(addressRange: 0x0000...0x1fff)
-        let ppuBus = Bus(addressableDevices: [ppuCartridgeConnector])
+        nameTable = try RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x2000...0x3eff)
+        palette = try RandomAccessMemoryDevice(memorySize: 0x20, addressRange: 0x3f00...0x3fff)
+        let ppuBus = try Bus(addressableDevices: [ppuCartridgeConnector, nameTable, palette])
         ppu = PixelProcessingUnit(bus: ppuBus)
         
         ram = try! RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x0000...0x1fff)
         cpuCartridgeConnector = CartridgeConnector(addressRange: 0x8000...0xffff)
-        let cpuBus = Bus(addressableDevices: [ram, ppu, cpuCartridgeConnector])
-        cpu = MOS6502(bus: cpuBus)
+        let cpuBus = try Bus(addressableDevices: [ram, ppu, cpuCartridgeConnector])
+        cpu = RP2A03G(bus: cpuBus)
     }
 
     
     // MARK: - The internal hardware of the NES
     
     /// The CPU.
-    let cpu: MOS6502
+    let cpu: RP2A03G
     
     /// The CPU's RAM.
     let ram: RandomAccessMemoryDevice
@@ -57,6 +59,12 @@ public final class NES {
     /// Connects a cartridge to the PPU bus.
     let ppuCartridgeConnector: CartridgeConnector
 
+    /// The background "name table" memory.
+    let nameTable: RandomAccessMemoryDevice
+    
+    /// The palette memory.
+    let palette: RandomAccessMemoryDevice
+    
     
     // MARK: - Connecting to the inputs of the hardware
     
@@ -65,19 +73,19 @@ public final class NES {
         didSet {
             cpuCartridgeConnector.cartridge = cartridge
             ppuCartridgeConnector.cartridge = cartridge
+            ppu.mirroringMode = cartridge?.mirroringMode ?? .horizontal
         }
     }
     
     
     // MARK: - Connecting to the outputs of the hardware
     
-    public weak var videoReceiver: VideoReceiver? {
-        didSet {
-            ppu.videoReceiver = videoReceiver
-        }
+    public weak var videoReceiver: (any VideoReceiver)? {
+        get { ppu.videoReceiver }
+        set { ppu.videoReceiver = newValue }
     }
     
-    public weak var audioReceiver: AudioReceiver?
+    public weak var audioReceiver: (any AudioReceiver)?
     
     
     // MARK: - Updating the hardware
@@ -96,11 +104,11 @@ public final class NES {
     
     /// Advances the hardware to the end of the current instruction.
     public func advanceInstruction() {
-        repeat { clock() } while !cpu.isCurrentInstructionComplete
+        repeat { clock() } while !cpu.core.isCurrentInstructionComplete
         
         // The CPU is clocked slower than the PPU, so clock the hardware
         // until the next instruction starts.
-        repeat { clock() } while cpu.isCurrentInstructionComplete
+        repeat { clock() } while cpu.core.isCurrentInstructionComplete
     }
     
     /// Advances the hardware to the end of the current frame.
@@ -108,7 +116,7 @@ public final class NES {
         repeat { clock() } while !ppu.isFrameComplete
         
         // Finish executing the current instruction.
-        repeat { clock() } while !cpu.isCurrentInstructionComplete
+        repeat { clock() } while !cpu.core.isCurrentInstructionComplete
     }
     
     /// Resets the hardware.
@@ -119,14 +127,14 @@ public final class NES {
         let videoOutputParams = VideoOutputParameters(resolution: (width: 256, height: 240))
         videoReceiver?.setVideoOutputParameters(videoOutputParams)
         
-        cpu.reset()
+        cpu.core.reset()
     }
     
 
     // MARK: - Private
     
     /// The total clock count since the hardware was reset.
-    private var clockCount: UInt32 = 0
+    private var clockCount: UInt = 0
     
     /// The remaining residual time since the last update.
     private var residualTime: TimeInterval = 0
@@ -137,9 +145,13 @@ public final class NES {
         ppu.clock()
         
         if clockCount % 3 == 0 {
-            cpu.clock()
+            cpu.core.clock()
         }
         
-        clockCount += 1
+        if ppu.nmi {
+            cpu.core.nmi()
+        }
+        
+        clockCount &+= 1
     }
 }

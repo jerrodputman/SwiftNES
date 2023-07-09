@@ -24,8 +24,8 @@ import Foundation
 
 /// Represents errors thrown by the device.
 enum RandomAccessMemoryDeviceError: Error {
-    /// The address range specified is not a multiple of the specified memory size.
-    case addressRangeNotMultipleOfMemorySize(memorySize: UInt32, addressRange: CountableClosedRange<UInt16>)
+    /// The memory size is greater than the address range.
+    case memorySizeGreaterThanAddressRange(memorySize: UInt32, addressRange: CountableClosedRange<UInt16>)
 }
 
 /// Represents a device that provides random access memory to a bus.
@@ -35,16 +35,16 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
     
     /// Creates a new random access memory device with the specified memory size and address range.
     ///
-    /// - note: If `addressRange` is larger than `memorySize`, the memory will be mirrored across the
+    /// - Note: If `addressRange` is larger than `memorySize`, the memory will be mirrored across the
     /// available range. For example, if the memory size is `0x7f` but the address range is from `0x00...0xff`,
     /// then the memory accessed starting at `0x80` will be the start of the memory.
     ///
-    /// - parameter memorySize: The size of the memory of the device.
-    /// - parameter addressRange: The range of addresses that this device responds to. The size must be
-    /// a multiple of `memorySize`.
+    /// - Parameters:
+    ///     - memorySize: The size of the memory of the device.
+    ///     - addressRange: The range of addresses that this device responds to. The size must be a multiple of `memorySize`.
     init(memorySize: UInt32, addressRange: AddressRange) throws {
-        guard UInt32(addressRange.count) % memorySize == 0 else {
-            throw RandomAccessMemoryDeviceError.addressRangeNotMultipleOfMemorySize(memorySize: memorySize, addressRange: addressRange)
+        guard memorySize <= addressRange.count else {
+            throw RandomAccessMemoryDeviceError.memorySizeGreaterThanAddressRange(memorySize: memorySize, addressRange: addressRange)
         }
         
         self.memory = Array<Value>(repeating: Value.zero, count: Int(memorySize))
@@ -53,7 +53,8 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
     
     /// Creates a new random access memory device with the specified address range.
     ///
-    /// - parameter addressRange: The range of addresses that this device responds to.
+    /// - Parameters:
+    ///     - addressRange: The range of addresses that this device responds to.
     convenience init(addressRange: AddressRange) {
         try! self.init(memorySize: UInt32(addressRange.count), addressRange: addressRange)
     }
@@ -61,9 +62,13 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
     
     // MARK: - Accessing the device
     
+    @inlinable
     func respondsTo(_ address: Address) -> Bool {
         addressRange.contains(address)
     }
+    
+    /// The range of addresses that the device responds to.
+    let addressRange: AddressRange
     
     func read(from address: Address) -> Value {
         guard let addressIndex = addressRange.firstIndex(of: address) else { return 0 }
@@ -81,9 +86,6 @@ final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
     
     
     // MARK: - Private
-    
-    /// The range of addresses that the device responds to.
-    fileprivate let addressRange: AddressRange
     
     /// The memory of the device.
     fileprivate var memory: [Value]

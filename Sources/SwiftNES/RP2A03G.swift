@@ -22,7 +22,28 @@
 
 import Foundation
 
-public protocol AudioReceiver: AnyObject {
-    // TODO: Define an AudioReceiver.
-    // TODO: Move protocol into an SDK package.
+final class RP2A03G {
+    
+    // MARK: - Initializers
+    
+    /// Creates a virtual CPU with the specified bus.
+    ///
+    /// - parameter bus: The bus that the CPU should use to communicate with other devices.
+    init(bus: Bus) {
+        // TODO: Create the APU and connect it to the bus.
+        // TODO: Create the DMA controller and connect it to the bus.
+        self.core = MOS6502(bus: bus)
+    }
+    
+    
+    // MARK: - Hardware
+    
+    /// The 6502 core of the 2A03.
+    let core: MOS6502
+    
+    //let apu: AudioProcessingUnit
+    
+    //var controlPad1: ControlPad?
+    
+    //var controlPad2: ControlPad?
 }

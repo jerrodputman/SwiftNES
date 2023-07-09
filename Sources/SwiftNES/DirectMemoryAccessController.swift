@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2019 Jerrod Putman
+// Copyright (c) 2020 Jerrod Putman
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,24 @@
 
 import Foundation
 
-public protocol AudioReceiver: AnyObject {
-    // TODO: Define an AudioReceiver.
-    // TODO: Move protocol into an SDK package.
+struct ObjectAttributeEntry {
+    var y: UInt8
+    var id: UInt8
+    var attribute: UInt8
+    var x: UInt8
+}
+
+var objectAttributeMemory: [ObjectAttributeEntry] = []
+
+final class DirectMemoryAccessController {
+    
+    init() {
+        page = 0
+        address = 0
+        data = 0
+    }
+    
+    private var page: UInt8
+    private var address: UInt8
+    private var data: Value
 }

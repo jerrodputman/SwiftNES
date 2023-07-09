@@ -62,6 +62,7 @@ extension Mapper {
     ///
     /// - parameter address: The address.
     /// - returns: Whether or not the mapper responds to the address.
+    @inlinable
     func respondsTo(_ address: Address) -> Bool {
         return isAddressingProgramMemory(address)
             || isAddressingCharacterMemory(address)
@@ -71,6 +72,7 @@ extension Mapper {
     ///
     /// - parameter address: The address.
     /// - returns: Whether or not the address is addressing program memory.
+    @inlinable
     func isAddressingProgramMemory(_ address: Address) -> Bool {
         return (0x8000...0xffff).contains(address)
     }
@@ -79,6 +81,7 @@ extension Mapper {
     ///
     /// - parameter address: The address.
     /// - returns: Whether or not the address is addressing character memory.
+    @inlinable
     func isAddressingCharacterMemory(_ address: Address) -> Bool {
         return (0x0000...0x1fff).contains(address)
     }

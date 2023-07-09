@@ -23,10 +23,27 @@
 import Foundation
 
 /// Represents an address within the addressable range of the NES.
-typealias Address = UInt16
+public typealias Address = UInt16
 
 /// A range within the complete addressable range of the NES.
-typealias AddressRange = CountableClosedRange<UInt16>
+public typealias AddressRange = CountableClosedRange<UInt16>
 
 /// The type of data that can be bussed around on the NES.
-typealias Value = UInt8
+public typealias Value = UInt8
+
+
+extension Address {
+    init(lo: UInt8, hi: UInt8) {
+        self = (UInt16(hi) << 8) | UInt16(lo)
+    }
+    
+    var lo: Value { Value(self & 0x00ff) }
+    
+    var hi: Value { Value((self >> 8) & 0x00ff) }
+    
+    func mirrored(after logicalEnd: UInt16, within range: AddressRange) -> Address? {
+        guard range.contains(self) else { return nil }
+        
+        return range.lowerBound + (self & logicalEnd)
+    }
+}
