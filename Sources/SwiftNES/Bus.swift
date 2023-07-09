@@ -91,8 +91,10 @@ final class Bus {
 
     // MARK: - Private
 
-    /// The ranges 
+    /// The ranges of the addressable devices attached to the bus that can be read from.
     private let addressableReadDeviceRanges: [AddressRange]
+  
+    /// The ranges of the addressable devices attached to the bus that can be written to.
     private let addressableWriteDeviceRanges: [AddressRange]
     
     /// All of the addressable devices attached to the bus that can be read from.
