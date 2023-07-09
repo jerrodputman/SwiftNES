@@ -22,7 +22,7 @@
 
 import Foundation
 
-/// A class that represents the complete NES hardware.
+/// A class that represents the complete NES (NES-001) hardware.
 public final class NES {
     
     // MARK: - Initializers
@@ -36,8 +36,10 @@ public final class NES {
         ppu = PixelProcessingUnit(bus: ppuBus)
         
         ram = try! RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x0000...0x1fff)
+        controllerConnector1 = ControllerConnector(address: 0x4016)
+        controllerConnector2 = ControllerConnector(address: 0x4017)
         cpuCartridgeConnector = CartridgeConnector(addressRange: 0x8000...0xffff)
-        let cpuBus = try Bus(addressableDevices: [ram, ppu, cpuCartridgeConnector])
+        let cpuBus = try Bus(addressableDevices: [ram, ppu, controllerConnector1, controllerConnector2, cpuCartridgeConnector])
         cpu = RP2A03G(bus: cpuBus)
     }
 
@@ -65,6 +67,12 @@ public final class NES {
     /// The palette memory.
     let palette: RandomAccessMemoryDevice
     
+    /// The controller connector for controller port 1.
+    let controllerConnector1: ControllerConnector
+    
+    /// The controller connector for controller port 2.
+    let controllerConnector2: ControllerConnector
+    
     
     // MARK: - Connecting to the inputs of the hardware
     
@@ -74,6 +82,18 @@ public final class NES {
             cpuCartridgeConnector.cartridge = cartridge
             ppuCartridgeConnector.cartridge = cartridge
             ppu.mirroringMode = cartridge?.mirroringMode ?? .horizontal
+        }
+    }
+    
+    public var controller1: (any Controller)? = nil {
+        didSet {
+            controllerConnector1.controller = controller1
+        }
+    }
+    
+    public var controller2: (any Controller)? = nil {
+        didSet {
+            controllerConnector2.controller = controller2
         }
     }
     
