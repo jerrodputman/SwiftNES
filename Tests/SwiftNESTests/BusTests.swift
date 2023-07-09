@@ -4,23 +4,13 @@ import XCTest
 final class BusTests: XCTestCase {
     
     class MockDevice: AddressableReadWriteDevice {
+        let addressRange: AddressRange = 0x0000...0xffff
+        
         func read(from address: Address) -> Value { return values[Int(address)] }
         
         func write(_ data: Value, to address: Address) { values[Int(address)] = data }
         
-        func respondsTo(_ address: Address) -> Bool { return address % 2 == 0 ? true : false }
-        
         var values: [Value] = Array(repeating: 0x00, count: 0x10000)
-    }
-    
-    func testRead() {
-        let device1 = MockDevice()
-        let device2 = MockDevice()
-        
-    }
-    
-    func testWrite() {
-        
     }
     
     func testReadPerformance() throws {
@@ -50,8 +40,6 @@ final class BusTests: XCTestCase {
     }
     
     static var allTests = [
-        ("testRead", testRead),
-        ("testWrite", testWrite),
         ("testReadPerformance", testReadPerformance),
         ("testWritePerformance", testWritePerformance),
     ]
