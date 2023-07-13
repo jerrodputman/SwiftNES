@@ -38,9 +38,4 @@ final class BusTests: XCTestCase {
                 }
         }
     }
-    
-    static var allTests = [
-        ("testReadPerformance", testReadPerformance),
-        ("testWritePerformance", testWritePerformance),
-    ]
 }

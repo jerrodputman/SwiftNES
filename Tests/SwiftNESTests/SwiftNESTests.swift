@@ -62,8 +62,4 @@ final class SwiftNESTests: XCTestCase {
             print(line)
         }
     }
-
-    static var allTests = [
-        ("testMultiply10By3", testMultiply10By3),
-    ]
 }

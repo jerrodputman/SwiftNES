@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 /// A class that emulates the behavior of the 2C02 pixel processing unit.
 final class PixelProcessingUnit: AddressableReadWriteDevice {
     
@@ -32,6 +30,11 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     /// - parameter bus: The bus that the PPU should use to communicate with other devices.
     init(bus: Bus) {
         self.bus = bus
+        self.objectAttributeMemory = Array(repeating: ObjectAttributeEntry(y: 0, tileId: 0, attribute: 0, x: 0), count: 64)
+        
+        scanlineSprites.reserveCapacity(8)
+        spriteShifterPatternLo.reserveCapacity(8)
+        spriteShifterPatternHi.reserveCapacity(8)
     }
     
     
@@ -46,7 +49,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         static let yIncrementMode = Control(rawValue: (1 << 2))
         static let patternSprite = Control(rawValue: (1 << 3))
         static let patternBackground = Control(rawValue: (1 << 4))
-        static let spriteSize = Control(rawValue: (1 << 5))
+        static let doubleSpriteHeight = Control(rawValue: (1 << 5))
         static let slaveMode = Control(rawValue: (1 << 6))
         static let enableNmi = Control(rawValue: (1 << 7))
     }
@@ -84,6 +87,13 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     /// The mask register.
     private(set) var mask: Mask = Mask(rawValue: 0)
     
+    /// The OAM address register.
+    private(set) var oamAddress: UInt8 = 0
+    
+    
+    /// The object attribute memory (OAM).
+    private(set) var objectAttributeMemory: [ObjectAttributeEntry]
+    
     
     var mirroringMode: Cartridge.MirroringMode = .horizontal
 
@@ -118,7 +128,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
             
             if vramAddress.coarseX == 31 {
                 vramAddress.coarseX = 0
-                vramAddress.nametableX = ~vramAddress.nametableX
+                vramAddress.nametableX = vramAddress.nametableX == 0 ? 1 : 0
             } else {
                 vramAddress.coarseX += 1
             }
@@ -134,7 +144,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
                 vramAddress.fineY = 0
                 if vramAddress.coarseY == 29 {
                     vramAddress.coarseY = 0
-                    vramAddress.nametableY = ~vramAddress.nametableY
+                    vramAddress.nametableY = vramAddress.nametableY == 0 ? 1 : 0
                 } else if vramAddress.coarseY == 31 {
                     vramAddress.coarseY = 0
                 } else {
@@ -166,18 +176,35 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         }
         
         func updateShifters() {
-            guard mask.contains(.renderBackground) else { return }
+            if mask.contains(.renderBackground) {
+                bgShiftPatternLo <<= 1
+                bgShiftPatternHi <<= 1
+                bgShiftAttributeLo <<= 1
+                bgShiftAttributeHi <<= 1
+            }
             
-            bgShiftPatternLo <<= 1
-            bgShiftPatternHi <<= 1
-            bgShiftAttributeLo <<= 1
-            bgShiftAttributeHi <<= 1
+            if mask.contains(.renderSprites) && cycle >= 1 && cycle < 258 {
+                for scanlineSpriteIndex in 0..<scanlineSprites.count {
+                    if scanlineSprites[scanlineSpriteIndex].x > 0 {
+                        scanlineSprites[scanlineSpriteIndex].x -= 1
+                    } else {
+                        spriteShifterPatternLo[scanlineSpriteIndex] = spriteShifterPatternLo[scanlineSpriteIndex] << 1
+                        spriteShifterPatternHi[scanlineSpriteIndex] = spriteShifterPatternHi[scanlineSpriteIndex] << 1
+                    }
+                }
+            }
         }
         
         if scanline == -1
             && cycle == 1 {
-            // This is the start of a new frame, so clear the vertical blank flag.
+            // This is the start of a new frame, so clear the vertical blank,
+            // sprite zero hit, and sprite overflow flags.
             status.remove(.verticalBlank)
+            status.remove(.spriteZeroHit)
+            status.remove(.spriteOverflow)
+            
+            spriteShifterPatternLo = Array(repeating: 0, count: 8)
+            spriteShifterPatternHi = Array(repeating: 0, count: 8)
         }
         
         if scanline == -1
@@ -192,6 +219,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         }
         
         if (-1..<240).contains(scanline) {
+            // Background rendering.
             if (2..<258).contains(cycle)
                 || (321..<338).contains(cycle) {
                 updateShifters()
@@ -213,14 +241,14 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
                 case 4:
                     let address = ((control.contains(.patternBackground) ? 1 : 0) << 12) + (UInt16(bgNextTileId) << 4) + vramAddress.fineY + 0
                     bgNextTileLSB = bus.read(from: mirroredAddress(address))
-
+                    
                 case 6:
                     let address = ((control.contains(.patternBackground) ? 1 : 0) << 12) + (UInt16(bgNextTileId) << 4) + vramAddress.fineY + 8
                     bgNextTileMSB = bus.read(from: mirroredAddress(address))
-
+                    
                 case 7:
                     incrementScrollX()
-
+                    
                 default:
                     break
                 }
@@ -239,6 +267,109 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
                 || cycle == 340 {
                 let address = Self.nametableAddressRange.lowerBound | (vramAddress.rawValue & 0x0fff)
                 bgNextTileId = bus.read(from: mirroredAddress(address))
+            }
+            
+            
+            // Sprite rendering.
+            if cycle == 257 && scanline >= 0 {
+                // Reset list of sprites on this scanline.
+                scanlineSprites.removeAll(keepingCapacity: true)
+                
+                // Reset sprite zero hit flag.
+                spriteZeroHitPossible = false
+                
+                // Loop through each entry in the OAM.
+                for (index, entry) in objectAttributeMemory.enumerated() {
+                    let diff: Int16 = (Int16(scanline) - Int16(entry.y))
+                    
+                    // Check if the sprite is within this scanline.
+                    if diff >= 0 && diff < (control.contains(.doubleSpriteHeight) ? 16 : 8) {
+                        // If we haven't added the maximum number of sprites to our `scanlineSprites` array,
+                        // then add the entry to the list of sprites for this scanline. Otherwise, set
+                        // the `.spriteOverflow` status flag.
+                        if scanlineSprites.count < 8 {
+                            scanlineSprites.append(entry)
+
+                            // If this is sprite zero, then mark that sprite-0 hit is possible.
+                            if index == 0 {
+                                spriteZeroHitPossible = true
+                            }
+                        } else {
+                            status.insert(.spriteOverflow)
+                            break
+                        }
+                    }
+                }
+            }
+            
+            if cycle == 340 {
+                // Reset sprite shifters on this scanline.
+                spriteShifterPatternLo = Array(repeating: 0, count: 8)
+                spriteShifterPatternHi = Array(repeating: 0, count: 8)
+
+                for (index, entry) in scanlineSprites.enumerated() {
+                    let spritePatternAddressLo, spritePatternAddressHi: UInt16
+                    var spritePatternBitsLo, spritePatternBitsHi: UInt8
+                    
+                    if !control.contains(.doubleSpriteHeight) {
+                        // 8-pixel high sprites.
+                        if (entry.attribute & 0x80) == 0 {
+                            // Sprite NOT flipped vertically.
+                            spritePatternAddressLo = (UInt16(control.contains(.patternSprite) ? 1 : 0) << 12)
+                                | (UInt16(entry.tileId) << 4)
+                                | UInt16(bitPattern: scanline - Int16(entry.y))
+                        } else {
+                            // Sprite flipped vertically.
+                            spritePatternAddressLo = (UInt16(control.contains(.patternSprite) ? 1 : 0) << 12)
+                                | (UInt16(entry.tileId) << 4)
+                                | (7 &- UInt16(bitPattern: scanline - Int16(entry.y)))
+                        }
+                    } else {
+                        // 16-pixel high sprites.
+                        if (entry.attribute & 0x80) == 0 {
+                            // Sprite NOT flipped vertically.
+                            if scanline - Int16(entry.y) < 8 {
+                                // Top 8 rows of the sprite.
+                                spritePatternAddressLo = ((UInt16(entry.tileId) & 0x01) << 12)
+                                | ((UInt16(entry.tileId) & 0xfe) << 4)
+                                | ((UInt16(bitPattern: scanline - Int16(entry.y))) & 0x07)
+                            } else {
+                                // Bottom 8 rows of the sprite.
+                                spritePatternAddressLo = ((UInt16(entry.tileId) & 0x01) << 12)
+                                | (((UInt16(entry.tileId) & 0xfe) + 1) << 4)
+                                | ((UInt16(bitPattern: scanline - Int16(entry.y))) & 0x07)
+                            }
+                        } else {
+                            // Sprite flipped vertically.
+                            if scanline - Int16(entry.y) < 8 {
+                                // Top 8 rows of the sprite.
+                                spritePatternAddressLo = ((UInt16(entry.tileId) & 0x01) << 12)
+                                | ((UInt16(entry.tileId) & 0xfe) << 4)
+                                | (7 &- ((UInt16(bitPattern: scanline - Int16(entry.y))) & 0x07))
+                            } else {
+                                // Bottom 8 rows of the sprite.
+                                spritePatternAddressLo = ((UInt16(entry.tileId) & 0x01) << 12)
+                                | (((UInt16(entry.tileId) & 0xfe) + 1) << 4)
+                                | (7 &- ((UInt16(bitPattern: scanline - Int16(entry.y))) & 0x07))
+                            }
+                        }
+                    }
+                    
+                    // The pattern address for the high bitplane.
+                    spritePatternAddressHi = spritePatternAddressLo + 8
+                    
+                    // Get the bits of the low and high bitplanes.
+                    spritePatternBitsLo = bus.read(from: spritePatternAddressLo)
+                    spritePatternBitsHi = bus.read(from: spritePatternAddressHi)
+                    
+                    if (entry.attribute & 0x40) > 0 {
+                        spritePatternBitsLo = spritePatternBitsLo.bitSwapped
+                        spritePatternBitsHi = spritePatternBitsHi.bitSwapped
+                    }
+                    
+                    spriteShifterPatternLo[index] = spritePatternBitsLo
+                    spriteShifterPatternHi[index] = spritePatternBitsHi
+                }
             }
         }
         
@@ -267,7 +398,82 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
             bgPalette = (paletteHi << 1) | paletteLo
         }
         
-        let bgColor = color(fromPalette: bgPalette, index: bgPixel)
+        var fgPixel: UInt8 = 0
+        var fgPalette: UInt8 = 0
+        var fgPriority: UInt8 = 0
+        
+        if mask.contains(.renderSprites) {
+            spriteZeroBeingRendered = false
+            
+            for (index, entry) in scanlineSprites.enumerated() {
+                if entry.x == 0 {
+                    let pixelLo: UInt8 = (spriteShifterPatternLo[index] & 0x80) > 0 ? 1 : 0
+                    let pixelHi: UInt8 = (spriteShifterPatternHi[index] & 0x80) > 0 ? 1 : 0
+                    fgPixel = (pixelHi << 1) | pixelLo
+                    
+                    fgPalette = (entry.attribute & 0x03) + 0x04
+                    fgPriority = (entry.attribute & 0x20) == 0 ? 1 : 0
+                    
+                    // If the sprite pixel isn't transparent, then break out as we've found
+                    // a pixel we can (potentially) draw.
+                    if fgPixel != 0 {
+                        // Mark if we're rendering sprite zero.
+                        if index == 0 {
+                            spriteZeroBeingRendered = true
+                        }
+                        
+                        break
+                    }
+                }
+            }
+        }
+        
+        var pixel: UInt8 = 0
+        var palette: UInt8 = 0
+        
+        if bgPixel == 0 && fgPixel == 0 {
+            // Background pixel is transparent.
+            // Sprite pixel is transparent.
+            // Select the "transparent" color.
+            pixel = 0x00
+            palette = 0x00
+        } else if bgPixel == 0 && fgPixel > 0 {
+            // Background pixel is transparent.
+            // Sprite pixel is visible.
+            // Select the sprite pixel.
+            pixel = fgPixel
+            palette = fgPalette
+        } else if bgPixel > 0 && fgPixel == 0 {
+            // Background pixel is visible.
+            // Foreground pixel is transparent.
+            // Select the background pixel.
+            pixel = bgPixel
+            palette = bgPalette
+        } else {
+            if fgPriority > 0 {
+                pixel = fgPixel
+                palette = fgPalette
+            } else {
+                pixel = bgPixel
+                palette = bgPalette
+            }
+            
+            if spriteZeroHitPossible && spriteZeroBeingRendered {
+                if mask.contains([.renderBackground, .renderSprites]) {
+                    if mask.isDisjoint(with: [.renderBackgroundLeft, .renderSpritesLeft]) {
+                        if cycle >= 9 && cycle < 258 {
+                            status.insert(.spriteZeroHit)
+                        }
+                    } else {
+                        if cycle >= 1 && cycle < 258 {
+                            status.insert(.spriteZeroHit)
+                        }
+                    }
+                }
+            }
+        }
+        
+        let bgColor = color(fromPalette: palette, index: pixel)
         videoReceiver?.setPixel(atX: Int(cycle - 1),
                                 y: Int(scanline),
                                 withColor: bgColor.rawValue)
@@ -317,8 +523,9 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
             return data
             
         case .oamData:
-            // TODO: Return OAM data at OAM address.
-            break
+            return objectAttributeMemory.withUnsafeBytes { pointer in
+                pointer[Int(oamAddress)]
+            }
 
         case .ppuData:
             // Reading data from the PPU is delayed by one cycle.
@@ -358,12 +565,12 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
             break
 
         case .oamAddress:
-            // TODO: Write the OAM address.
-            break
+            oamAddress = value
             
         case .oamData:
-            // TODO: Set the data at the OAM address.
-            break
+            objectAttributeMemory.withUnsafeMutableBytes { pointer in
+                pointer[Int(oamAddress)] = value
+            }
 
         case .scroll:
             switch ppuAddressLatch {
@@ -492,6 +699,13 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
     private var bgShiftAttributeLo: UInt16 = 0
     private var bgShiftAttributeHi: UInt16 = 0
     
+    private var scanlineSprites: [ObjectAttributeEntry] = []
+    private var spriteShifterPatternLo: [UInt8] = []
+    private var spriteShifterPatternHi: [UInt8] = []
+    
+    private var spriteZeroHitPossible = false
+    private var spriteZeroBeingRendered = false
+    
     
     private func mirroredAddress(_ address: Address) -> Address {
         switch address {
@@ -512,7 +726,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
                 case 0x2000...0x23ff, 0x2800...0x2bff:
                     return 0x2000 | (address & 0x03ff)
                 case 0x2400...0x27ff, 0x2c00...0x2fff:
-                    return 0x2800 | (address & 0x0fff)
+                    return 0x2400 | (address & 0x0fff)
                 default:
                     return address
                 }
@@ -545,7 +759,7 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
                     var tileMSB = bus.read(from: UInt16(index) * 0x1000 + byteOffset + UInt16(row) + 8)
                     
                     for column: Int in 0..<8 {
-                        let pixel = (tileLSB & 0x01) + (tileMSB & 0x01)
+                        let pixel = ((tileLSB & 0x01) << 1) | (tileMSB & 0x01)
                         tileLSB >>= 1
                         tileMSB >>= 1
                         
@@ -563,6 +777,14 @@ final class PixelProcessingUnit: AddressableReadWriteDevice {
         let colorIndex = Int(bus.read(from: mirroredAddress(address)) & 0x3f)
         
         return Self.colors[colorIndex]
+    }
+}
+
+extension PixelProcessingUnit: DirectMemoryAccessableWriteDevice {
+    func dmaWrite(_ value: Value, to oamAddress: UInt8) {
+        objectAttributeMemory.withUnsafeMutableBytes { pointer in
+            pointer[Int(oamAddress)] = value
+        }
     }
 }
  
@@ -642,4 +864,17 @@ extension PixelProcessingUnit {
                                           Color(160, 162, 160),
                                           Color(0, 0, 0),
                                           Color(0, 0, 0)]
+}
+
+extension UInt8 {
+    /// Returns a "bit-swapped" value.
+    ///
+    /// A value of `0b10110000` becomes `0b00001101`.
+    var bitSwapped: UInt8 {
+        var b = self
+        b = ((b & 0xf0) >> 4) | ((b & 0x0f) << 4)
+        b = ((b & 0xcc) >> 2) | ((b & 0x33) << 2)
+        b = ((b & 0xaa) >> 1) | ((b & 0x55) << 1)
+        return b
+    }
 }

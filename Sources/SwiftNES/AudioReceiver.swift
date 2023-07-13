@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 public protocol AudioReceiver: AnyObject {
     // TODO: Define an AudioReceiver.
     // TODO: Move protocol into an SDK package.
