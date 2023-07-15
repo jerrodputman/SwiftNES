@@ -48,7 +48,7 @@ protocol DirectMemoryAccessableWriteDevice: AnyObject {
 }
 
 /// Represents the direct memory access controller of the NES.
-final class DirectMemoryAccessController: AddressableWriteDevice {
+final class DirectMemoryAccessController: AddressableDevice {
     
     // MARK: - Initializers
     
@@ -114,6 +114,10 @@ final class DirectMemoryAccessController: AddressableWriteDevice {
     // MARK: - AddressableWriteDevice
     
     let addressRange: AddressRange
+    
+    func read(from address: Address) -> Value {
+        return 0
+    }
     
     func write(_ data: Value, to address: Address) {
         page = data

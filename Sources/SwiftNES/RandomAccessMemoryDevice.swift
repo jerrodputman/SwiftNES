@@ -27,7 +27,7 @@ enum RandomAccessMemoryDeviceError: Error {
 }
 
 /// Represents a device that provides random access memory to a bus.
-final class RandomAccessMemoryDevice: AddressableReadWriteDevice {
+final class RandomAccessMemoryDevice: AddressableDevice {
     
     // MARK: - Initializers
     

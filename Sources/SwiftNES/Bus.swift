@@ -32,13 +32,8 @@ final class Bus {
     init(addressableDevices: [any AddressableDevice]) throws {
         // TODO: Verify that there are no overlapping devices.
         
-        let addressableReadDevices = addressableDevices.compactMap { $0 as? AddressableReadDevice }
-        let addressableWriteDevices = addressableDevices.compactMap { $0 as? AddressableWriteDevice }
-        
-        self.addressableReadDeviceRanges = addressableReadDevices.map(\.addressRange)
-        self.addressableWriteDeviceRanges = addressableWriteDevices.map(\.addressRange)
-        self.addressableReadDevices = addressableReadDevices
-        self.addressableWriteDevices = addressableWriteDevices
+        self.addressableDeviceRanges = addressableDevices.map(\.addressRange)
+        self.addressableDevices = addressableDevices
     }
     
     
@@ -62,10 +57,10 @@ final class Bus {
     ///     - address: The ``Address`` to read from.
     /// - Returns: The ``Value`` that was read from a device on the bus.
     func read(from address: Address) -> Value {
-        guard let deviceToReadFromIndex = addressableReadDeviceRanges
+        guard let deviceToReadFromIndex = addressableDeviceRanges
             .firstIndex(where: { $0.contains(address) }) else { return 0 }
         
-        let deviceToReadFrom = addressableReadDevices[deviceToReadFromIndex]
+        let deviceToReadFrom = addressableDevices[deviceToReadFromIndex]
         
         return deviceToReadFrom.read(from: address)
     }
@@ -78,10 +73,10 @@ final class Bus {
     ///     - value: The ``Value`` to write to the bus.
     ///     - address: The ``Address`` to write to.
     func write(_ value: Value, to address: Address) {
-        guard let deviceToWriteToIndex = addressableWriteDeviceRanges
+        guard let deviceToWriteToIndex = addressableDeviceRanges
             .firstIndex(where: { $0.contains(address) }) else { return }
         
-        let deviceToWriteTo = addressableWriteDevices[deviceToWriteToIndex]
+        let deviceToWriteTo = addressableDevices[deviceToWriteToIndex]
         
         deviceToWriteTo.write(value, to: address)
     }
@@ -89,17 +84,11 @@ final class Bus {
 
     // MARK: - Private
 
-    /// The ranges of the ``AddressableReadDevice``s attached to the bus.
-    private let addressableReadDeviceRanges: [AddressRange]
+    /// The ranges of the ``AddressableDevice``s attached to the bus.
+    private let addressableDeviceRanges: [AddressRange]
   
-    /// The ranges of the ``AddressableWriteDevice``s attached to the bus.
-    private let addressableWriteDeviceRanges: [AddressRange]
-    
-    /// All of the ``AddressableReadDevice``s attached to the bus.
-    private let addressableReadDevices: [any AddressableReadDevice]
-
-    /// All of the ``AddressableWriteDevice``s attached to the bus.
-    private let addressableWriteDevices: [any AddressableWriteDevice]
+    /// All of the ``AddressableDevice``s attached to the bus.
+    private let addressableDevices: [any AddressableDevice]
 }
 
 extension Bus: DirectMemoryAccessableReadDevice {

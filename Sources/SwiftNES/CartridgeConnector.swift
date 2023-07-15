@@ -24,7 +24,7 @@
 ///
 /// Instead of attaching the cartridge directly to the bus, a connector is used to allow for
 /// runtime inserting and removal of the cartridge.
-final class CartridgeConnector: AddressableReadWriteDevice {
+final class CartridgeConnector: AddressableDevice {
     
     // MARK: - Initializers
     

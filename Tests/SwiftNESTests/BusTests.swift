@@ -3,7 +3,7 @@ import XCTest
 
 final class BusTests: XCTestCase {
     
-    class MockDevice: AddressableReadWriteDevice {
+    class MockDevice: AddressableDevice {
         let addressRange: AddressRange = 0x0000...0xffff
         
         func read(from address: Address) -> Value { return values[Int(address)] }
