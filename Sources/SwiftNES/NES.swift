@@ -159,6 +159,7 @@ public final class NES {
         videoReceiver?.setVideoOutputParameters(videoOutputParams)
         
         cpu.core.reset()
+        cartridge?.reset()
     }
     
 
