@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 /// A protocol that describes a device that is addressable on a system bus.
 protocol AddressableDevice: AnyObject {
     /// The address range of the device.

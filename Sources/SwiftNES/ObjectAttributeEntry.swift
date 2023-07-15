@@ -1,6 +1,6 @@
 // MIT License
 //
-// Copyright (c) 2019 Jerrod Putman
+// Copyright (c) 2023 Jerrod Putman
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,12 +20,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-public struct VideoOutputParameters {
-    public let resolution: (width: UInt, height: UInt)
-}
-
-public protocol VideoReceiver: AnyObject {
-    func setVideoOutputParameters(_ params: VideoOutputParameters)
-    func setPixel(atX x: Int, y: Int, withColor color: UInt32)
-    // TODO: Move protocol into an SDK package.
+/// Represents the attributes of a single hardware sprite object.
+struct ObjectAttributeEntry {
+    /// The y-position of the sprite.
+    var y: UInt8
+    
+    /// The tile index of the sprite.
+    var tileId: UInt8
+    
+    /// Miscellaneous attributes of the sprite.
+    var attribute: UInt8
+    
+    /// The x-position of the sprite.
+    var x: UInt8
 }

@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 /// A class that represents a connection to a cartridge.
 ///
 /// Instead of attaching the cartridge directly to the bus, a connector is used to allow for

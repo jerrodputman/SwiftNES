@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 /// A controller that can be connected to a ``ControllerConnector``.
 public protocol Controller: AnyObject {
     /// Reads a single bit from the controller.

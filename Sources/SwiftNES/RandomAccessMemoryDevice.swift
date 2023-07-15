@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 /// Represents errors thrown by the device.
 enum RandomAccessMemoryDeviceError: Error {
     /// The memory size is greater than the address range.

@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 /// A class that emulates the behavior of the MOS Technology 6502 microprocessor.
 final class MOS6502 {
     
@@ -112,7 +110,7 @@ final class MOS6502 {
         status.insert(.unused)
         
         // Increment the program counter since we read the opcode byte.
-        pc += 1
+        pc &+= 1
         
         // Get the instruction from the opcode.
         let instruction = MOS6502.instructions[Int(opcode)]
@@ -166,16 +164,16 @@ final class MOS6502 {
         // Push the program counter to the stack.
         // The program counter is 16-bits, so we require 2 writes.
         bus[0x0100 + Address(stkp)] = pc.hi
-        stkp -= 1
+        stkp &-= 1
         bus[0x0100 + Address(stkp)] = pc.lo
-        stkp -= 1
+        stkp &-= 1
         
         // Push the status register to the stack.
         status.remove(.break)
         status.insert(.unused)
         status.insert(.disableInterrupts)
         bus[0x0100 + Address(stkp)] = status.rawValue
-        stkp -= 1
+        stkp &-= 1
         
         // Read the new program counter location from a specific address.
         let irqAddress: Address = 0xfffe
@@ -192,16 +190,16 @@ final class MOS6502 {
         // Push the program counter to the stack.
         // The program counter is 16-bits, so we require 2 writes.
         bus[0x0100 + Address(stkp)] = pc.hi
-        stkp -= 1
+        stkp &-= 1
         bus[0x0100 + Address(stkp)] = pc.lo
-        stkp -= 1
+        stkp &-= 1
         
         // Push the status register to the stack.
         status.remove(.break)
         status.insert(.unused)
         status.insert(.disableInterrupts)
         bus[0x0100 + Address(stkp)] = status.rawValue
-        stkp -= 1
+        stkp &-= 1
         
         // Read the new program counter location from a specific address.
         let nmiAddress: Address = 0xfffa
@@ -853,7 +851,7 @@ extension MOS6502 {
     }
     
     private func BRK() {
-        pc += 1
+        pc &+= 1
         
         status.insert(.disableInterrupts)
         bus[0x0100 + Address(stkp)] = pc.hi
@@ -970,7 +968,7 @@ extension MOS6502 {
     }
     
     private func JSR(_ address: Address) {
-        pc -= 1
+        pc &-= 1
         
         bus[0x0100 + Address(stkp)] = pc.hi
         stkp &-= 1
@@ -1116,7 +1114,7 @@ extension MOS6502 {
         stkp &+= 1
         pc |= Address(bus[0x0100 + Address(stkp)]) << 8
 
-        pc += 1
+        pc &+= 1
     }
     
     private func SEC() {
@@ -1203,7 +1201,7 @@ extension MOS6502 {
     /// The next byte is used as a value.
     private func IMM() -> ReadAddressResult {
         let address = pc
-        pc += 1
+        pc &+= 1
         
         return (address, false)
     }
@@ -1214,7 +1212,7 @@ extension MOS6502 {
     private func ABS() -> ReadAddressResult {
         let address = Address(lo: bus[pc + 0],
                               hi: bus[pc + 1])
-        pc += 2
+        pc &+= 2
 
         return (address, false)
     }
@@ -1225,10 +1223,10 @@ extension MOS6502 {
     private func ABX() -> ReadAddressResult {
         let lo = bus[pc + 0]
         let hi = bus[pc + 1]
-        pc += 2
+        pc &+= 2
 
         var address = Address(lo: lo, hi: hi)
-        address += Address(x)
+        address &+= Address(x)
         
         let crossedPageBoundary = (address & 0xff00) != (hi << 8)
         
@@ -1241,7 +1239,7 @@ extension MOS6502 {
     private func ABY() -> ReadAddressResult {
         let lo = bus[pc + 0]
         let hi = bus[pc + 1]
-        pc += 2
+        pc &+= 2
 
         var address = Address(lo: lo, hi: hi)
         address &+= Address(y)
@@ -1256,7 +1254,7 @@ extension MOS6502 {
     /// The read address is used as a relative offset to the current address of the program counter.
     private func REL() -> ReadAddressResult {
         var relativeAddress = Address(bus[pc])
-        pc += 1
+        pc &+= 1
         
         if (relativeAddress & 0x80) > 0 {
             relativeAddress |= 0xFF00;
@@ -1272,7 +1270,7 @@ extension MOS6502 {
     private func ZP0() -> ReadAddressResult {
         var address = Address(bus[pc])
         address &= 0x00ff
-        pc += 1
+        pc &+= 1
         
         return (address, false)
     }
@@ -1284,7 +1282,7 @@ extension MOS6502 {
     private func ZPX() -> ReadAddressResult {
         var address = Address(bus[pc] &+ x)
         address &= 0x00ff
-        pc += 1
+        pc &+= 1
         
         return (address, false)
     }
@@ -1296,7 +1294,7 @@ extension MOS6502 {
     private func ZPY() -> ReadAddressResult {
         var address = Address(bus[pc] &+ y)
         address &= 0x00ff
-        pc += 1
+        pc &+= 1
         
         return (address, false)
     }
@@ -1307,7 +1305,7 @@ extension MOS6502 {
     private func IND() -> ReadAddressResult {
         let ptrLo = bus[pc + 0]
         let ptrHi = bus[pc + 1]
-        pc += 2
+        pc &+= 2
 
         let ptr = Address(lo: ptrLo, hi: ptrHi)
 
@@ -1326,7 +1324,7 @@ extension MOS6502 {
     /// The 8-bit address is offset by the value of the `x` register to index a location in the first page.
     private func IZX() -> ReadAddressResult {
         let ptr = Address(bus[pc])
-        pc += 1
+        pc &+= 1
         
         let lo = bus[(ptr + Address(x)) & 0x00ff]
         let hi = bus[(ptr + Address(x) + 1) & 0x00ff]
@@ -1341,7 +1339,7 @@ extension MOS6502 {
     /// offset this address.
     private func IZY() -> ReadAddressResult {
         let ptr = Address(bus[pc])
-        pc += 1
+        pc &+= 1
         
         let lo = bus[ptr & 0x00ff]
         let hi = bus[(ptr + 1) & 0x00ff]

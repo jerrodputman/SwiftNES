@@ -36,11 +36,15 @@ public final class NES {
         ppu = PixelProcessingUnit(bus: ppuBus)
         
         ram = try! RandomAccessMemoryDevice(memorySize: 0x0800, addressRange: 0x0000...0x1fff)
+        directMemoryAccessController = DirectMemoryAccessController(address: 0x4014)
         controllerConnector1 = ControllerConnector(address: 0x4016)
         controllerConnector2 = ControllerConnector(address: 0x4017)
         cpuCartridgeConnector = CartridgeConnector(addressRange: 0x8000...0xffff)
-        let cpuBus = try Bus(addressableDevices: [ram, ppu, controllerConnector1, controllerConnector2, cpuCartridgeConnector])
+        let cpuBus = try Bus(addressableDevices: [ram, ppu, directMemoryAccessController, controllerConnector1, controllerConnector2, cpuCartridgeConnector])
         cpu = RP2A03G(bus: cpuBus)
+        
+        directMemoryAccessController.readDevice = cpuBus
+        directMemoryAccessController.writeDevice = ppu
     }
 
     
@@ -67,6 +71,9 @@ public final class NES {
     /// The palette memory.
     let palette: RandomAccessMemoryDevice
     
+    /// The direct memory access (DMA) controller.
+    let directMemoryAccessController: DirectMemoryAccessController
+    
     /// The controller connector for controller port 1.
     let controllerConnector1: ControllerConnector
     
@@ -85,12 +92,14 @@ public final class NES {
         }
     }
     
+    /// The controller connected to controller port 1.
     public var controller1: (any Controller)? = nil {
         didSet {
             controllerConnector1.controller = controller1
         }
     }
     
+    /// The controller connected to controller port 2.
     public var controller2: (any Controller)? = nil {
         didSet {
             controllerConnector2.controller = controller2
@@ -100,11 +109,13 @@ public final class NES {
     
     // MARK: - Connecting to the outputs of the hardware
     
+    /// The device that receives the video output.
     public weak var videoReceiver: (any VideoReceiver)? {
         get { ppu.videoReceiver }
         set { ppu.videoReceiver = newValue }
     }
     
+    /// The device that receives the audio output.
     public weak var audioReceiver: (any AudioReceiver)?
     
     
@@ -165,7 +176,12 @@ public final class NES {
         ppu.clock()
         
         if clockCount % 3 == 0 {
-            cpu.core.clock()
+            // Handle DMA transfers.
+            // TODO: Properly throw this.
+            if try! !directMemoryAccessController.clock(cycleCount: clockCount) {
+                // If no DMA transfer is in progress, then clock the CPU instead.
+                cpu.core.clock()
+            }
         }
         
         if ppu.nmi {

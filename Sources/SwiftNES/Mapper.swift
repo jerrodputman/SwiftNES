@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import Foundation
-
 /// An enumeration that defines the mapped addresses that can be returned by a mapper.
 enum MappedAddress {
     /// The address could not be mapped.
