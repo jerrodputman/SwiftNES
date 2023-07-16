@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 /// A class that emulates the behavior of the 2C02 pixel processing unit.
-final class PixelProcessingUnit: AddressableReadWriteDevice {
+final class PixelProcessingUnit: AddressableDevice {
     
     // MARK: - Initializers
     

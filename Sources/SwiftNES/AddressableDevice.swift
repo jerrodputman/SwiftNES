@@ -22,29 +22,19 @@
 
 /// A protocol that describes a device that is addressable on a system bus.
 protocol AddressableDevice: AnyObject {
-    /// The address range of the device.
+    /// The ``AddressRange`` of the device.
     var addressRange: AddressRange { get }
-}
-
-/// A protocol that describes a device that is addressable on a system bus and can be read from.
-protocol AddressableReadDevice: AddressableDevice {
+    
     /// Reads from the addressable device at the specified address.
     ///
-    /// - Parameters:
-    ///     - address: The address to read from.
-    /// - Returns: The value stored at the address.
+    /// - Parameter address: The ``Address`` to read from.
+    /// - Returns: The ``Value`` stored at the ``Address``.
     func read(from address: Address) -> Value
-}
-
-/// A protocol that describes a device that is addressable on a system bus and can be written to.
-protocol AddressableWriteDevice: AddressableDevice {
+    
     /// Writes data to the addressable device at the specified address.
     ///
     /// - Parameters:
-    ///     - data: The data to be written.
-    ///     - address: The address to write to.
+    ///     - data: The ``Value`` to be written.
+    ///     - address: The ``Address`` to write to.
     func write(_ data: Value, to address: Address)
 }
-
-/// A protocol that describes a device that is addressable on a system bus and can be read from or written to.
-protocol AddressableReadWriteDevice: AddressableReadDevice, AddressableWriteDevice { }

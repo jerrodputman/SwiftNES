@@ -68,14 +68,19 @@ public final class Cartridge {
         dataLocation += programMemorySize
         
         let characterMemoryBanks = header.chrRomChunks
-        let characterMemorySize = 0x2000 * Int(characterMemoryBanks)
+        if characterMemoryBanks > 0 {
+            let characterMemorySize = 0x2000 * Int(characterMemoryBanks)
 
-        guard data.count >= dataLocation + characterMemorySize else {
-            throw CartridgeError.invalidDataFormat
+            guard data.count >= dataLocation + characterMemorySize else {
+                throw CartridgeError.invalidDataFormat
+            }
+            
+            characterMemory = [Value](data[dataLocation..<dataLocation + characterMemorySize])
+            dataLocation += characterMemorySize
+        } else {
+            // No character ROM banks, so set up character memory as RAM.
+            characterMemory = Array(repeating: 0, count: 0x2000)
         }
-        
-        characterMemory = [Value](data[dataLocation..<dataLocation + characterMemorySize])
-        dataLocation += characterMemorySize
 
         // Extract the mapper ID.
         let mapperId = ((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4)
@@ -89,7 +94,7 @@ public final class Cartridge {
         mapper = try mapperType.init(programMemoryBanks: programMemoryBanks, characterMemoryBanks: characterMemoryBanks)
         
         // Determine the mirroring mode.
-        mirroringMode = (header.mapper1 & 0x01) > 0 ? .vertical : .horizontal
+        hardwareMirroringMode = (header.mapper1 & 0x01) > 0 ? .vertical : .horizontal
         
         // If a program start address was specified, write it to the cartridge.
         if let programStartAddress = programStartAddress {
@@ -106,7 +111,7 @@ public final class Cartridge {
         programMemory = [Value](repeating: 0, count: 0x4000)
         characterMemory = []
         mapper = try Self.mapperTypes[0]!.init(programMemoryBanks: 1, characterMemoryBanks: 1)
-        mirroringMode = .horizontal
+        hardwareMirroringMode = .horizontal
         
         let programCode = string.hexToUInt8
         programMemory.replaceSubrange(0..<programCode.count, with: programCode)
@@ -117,12 +122,24 @@ public final class Cartridge {
     
     // MARK: - Accessing information about the cartridge
     
+    /// The mirroring modes that a cartridge can employ.
     enum MirroringMode {
+        /// Horizontal mirroring.
         case horizontal
+        
+        /// Vertical mirroring.
         case vertical
     }
     
-    let mirroringMode: MirroringMode
+    /// The current mirroring mode.
+    // TODO: Mirroring actually occurs on the cartridge and not in the PPU.
+    var mirroringMode: MirroringMode {
+        if let mirroringMode = mapper.mirroringMode {
+            return mirroringMode
+        } else {
+            return hardwareMirroringMode
+        }
+    }
     
     
     // MARK: - Reading and writing
@@ -132,13 +149,15 @@ public final class Cartridge {
     /// - parameter address: The address to read from. This address will be mapped by the `mapper`.
     /// - returns: The data at the specified address.
     func read(from address: Address) -> Value {
-        let mappedAddress = mapper.map(address)
+        let mappedAddress = mapper.read(from: address)
         
         switch mappedAddress {
         case .program(let address):
             return programMemory[Int(address)]
         case .character(let address):
             return characterMemory[Int(address)]
+        case .value(let value):
+            return value
         case .none:
             return 0
         }
@@ -149,16 +168,25 @@ public final class Cartridge {
     /// - parameter value: The value to write.
     /// - parameter address: The address to write to. This address will be mapped by the `mapper`.
     func write(_ value: Value, to address: Address) {
-        let mappedAddress = mapper.map(address)
+        let mappedAddress = mapper.write(value, to: address)
         
         switch mappedAddress {
         case .program(let address):
             programMemory[Int(address)] = value
         case .character(let address):
             characterMemory[Int(address)] = value
-        case .none:
+        case .value, .none:
             break
         }
+    }
+    
+    // MARK: Resetting the cartridge
+    
+    /// Resets the cartridge.
+    ///
+    /// This is primarily used to reset the mapper inside of the cartridge.
+    func reset() {
+        mapper.reset()
     }
     
 
@@ -171,13 +199,16 @@ public final class Cartridge {
     private var characterMemory: [Value]
     
     /// The catridge's mapper.
-    private let mapper: Mapper
+    private let mapper: any Mapper
+    
+    /// The mirror mode set by the cartridge hardware. Can be overridden by the mapper.
+    private var hardwareMirroringMode: MirroringMode
     
     
     /// The types of mappers that are found in a cartridge.
-    // TODO: If all of the mapper types are ever implemented, this should be an array.
     private static let mapperTypes: [UInt8: Mapper.Type] = [
-        0: Mapper000.self
+        0: Mapper000.self,
+        2: Mapper002.self,
     ]
     
     

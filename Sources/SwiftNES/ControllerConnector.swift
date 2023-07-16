@@ -34,7 +34,7 @@ public protocol Controller: AnyObject {
 }
 
 /// A device that allows a controller to be connected to the NES.
-final class ControllerConnector: AddressableReadWriteDevice {
+final class ControllerConnector: AddressableDevice {
     
     // MARK: - Initializers
     
