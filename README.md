@@ -6,9 +6,9 @@ An NES emulator written in [Swift](https://www.swift.org).
 This emulator is designed to be used as a pluggable component of a frontend application, and therefore does not actually produce an executable. The [SwiftEmu](https://github.com/jerrodputman/SwiftEmu) sample application can be used as a convenient, no frills frontend for the emulator.
 
 ## Goal
-The goal of this project was two learn more about how the internals of the NES works, how to write an emulator, and how to do it all in my personal favorite programming language, Swift.
+The goal of this project was to learn more about how the internals of the NES works, how to write an emulator, and how to do it all in my personal favorite programming language, Swift.
 
-Beyond that, the design of the emulator tries to mimic the actual components of the NES hardware. An instance of the `ControlPad` needs to be connected to one of the two `ControllerConnector` properties on the `NES` hardware instance; a `Cartridge` is connected to a `CartridgeConnector`; there's a `Bus` component which all of the components are attached to (including `RandomAccessMemory` devices and the `PixelProcessingUnit`).
+The design of the emulator tries to mimic the actual components of the NES hardware. For example, an instance of the `ControlPad` needs to be connected to one of the two `ControllerConnector` properties on the `NES` hardware instance; a `Cartridge` is connected to a `CartridgeConnector`; there's a `Bus` component which all of the hardware components are attached to (including `RandomAccessMemory` devices and the `PixelProcessingUnit`).
 
 ## Status
 This emulator is a small side project that I play around with from time to time. With that said, here are some of the things that are complete and some that are not.
